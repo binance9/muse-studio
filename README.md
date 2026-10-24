@@ -42,7 +42,7 @@ Giao diện Thư viện của Muse Studio đang chạy thật — mỗi video đ
 - **Lồng tiếng Việt theo vai:** chọn giọng theo nhân vật (nam/nữ, người lớn/trẻ em), hỗ trợ **VieNeu-TTS v3 Turbo** chạy trên máy bạn (không bắt buộc), không có thì tự dùng giọng đọc trực tuyến dự phòng.
 - **Nhạc nền tự sinh:** tool tự tạo nhạc nền hợp phim, **tự hạ nhỏ khi có lời thoại** (ducking), âm lượng tổng chuẩn phát sóng −14 LUFS.
 - **Dựng chuẩn phim:** thẻ tên phim mở đầu, chuyển cảnh mờ (fade) giữa các cảnh, chữ ký cuối/khung hình theo ý bạn.
-- **Phim xong là xem được ngay:** nằm trong mục **🎬 Phim đã hoàn thành** trong Studio (bấm ▶ Xem hoặc ⬇ Tải xuống), đồng thời **tự xuất thêm 1 bản ra màn hình Desktop** của máy.
+- **Phim xong là xem được ngay:** nằm luôn trong mục **🎬 Phim đã hoàn thành** trong Studio — vào app xem trước, **ưng rồi mới bấm ⬇ Tải xuống** để tự lưu về máy. Phim không tự chép đi nơi khác.
 - **Mọi video đều hiện thời lượng** ngay trên hình thu nhỏ, không cần bấm vào mới biết dài bao nhiêu.
 - Ngoài làm phim: vẫn tạo ảnh/video lẻ, tạo hàng loạt theo danh sách prompt, quản lý thư viện như trang gốc.
 
@@ -159,7 +159,6 @@ Không cài bước này vẫn làm phim được — dịch vụ tự dùng gi�
 5. Bấm **▶ LÀM PHIM** và chờ. Đừng tắt Muse2API, dịch vụ dựng phim và tab Studio trong lúc chạy. Mạng nghẽn là chuyện bình thường: tool tự thử lại, cảnh nào xong là lưu — nếu phải dừng giữa chừng, cứ **bấm ▶ LÀM PHIM lại**, tool chạy tiếp từ cảnh còn thiếu.
 6. Phim xong sẽ:
    - Phát ngay trong Studio và nằm ở mục **🎬 Phim đã hoàn thành** trong **Thư viện** (kéo xuống dưới danh sách clip lẻ) — lúc nào mở Studio cũng xem lại / tải lại được.
-   - Có thêm **1 bản ngoài màn hình Desktop** của máy.
    - File gốc nằm ở `C:\muse2api-test\film-service\outputs\`.
 
 ---
@@ -176,7 +175,7 @@ Không cài bước này vẫn làm phim được — dịch vụ tự dùng gi�
 | Tạo **ảnh** khóa cho nhân vật người thật bị từ chối | Công cụ tạo ảnh của muse không nhận ảnh người thật làm khung khóa | Dùng chế độ **Người thật** (quay thẳng video + ảnh mẫu) thay cho chế độ PRO khi làm phim người thật |
 | Các cảnh trong phim bị **trùng một clip** cho nhiều cảnh | Đã dùng chế độ chạy "đồng bộ/coherent" cho cả tập phim | Làm phim luôn dùng chế độ **độc lập (independent)** — bản Studio trong repo này đã mặc định như vậy, đừng đổi |
 | Phim dựng xong nhưng không có tiếng | ffmpeg chưa đúng chỗ hoặc film-service chưa chạy khi dựng | Kiểm tra đủ `ffmpeg.exe` + `ffprobe.exe` ở `C:\muse2api-test\ffmpeg\bin` (Bước 2) và `/health` (Bước 4), rồi dựng lại |
-| Phim xong nhưng không thấy ở đâu | — | Mở Studio → **Thư viện** → kéo xuống mục **🎬 Phim đã hoàn thành**; hoặc xem ngoài Desktop; hoặc thư mục `film-service\outputs` |
+| Phim xong nhưng không thấy ở đâu | — | Mở Studio → **Thư viện** → kéo xuống mục **🎬 Phim đã hoàn thành**; hoặc mở thư mục `film-service\outputs` |
 
 ## Bảo mật cho chính bạn
 

@@ -279,7 +279,7 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
       <div class="grid" id="libGrid" style="margin-top:13px"></div>
       <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:13px">
         <div class="row"><h3 style="margin:0">🎬 Phim đã hoàn thành</h3><span class="grow"></span><button id="filmOutRefresh" class="btn">↻ Làm mới</button></div>
-        <div class="small muted" style="margin-top:4px">Tập nào dựng xong cũng nằm ở đây — bấm ▶ Xem là xem ngay trong Studio, bấm ⬇ Tải xuống là lưu về máy. Phim mới dựng xong còn tự xuất thêm 1 bản ra ngoài màn hình Máy tính.</div>
+        <div class="small muted" style="margin-top:4px">Tập nào dựng xong cũng nằm luôn ở đây trong Studio — bấm ▶ Xem là xem ngay trong app, xem ưng rồi bấm ⬇ Tải xuống để tự lưu về máy.</div>
         <div id="filmOutputs" style="margin-top:10px"></div>
       </div>
     </div>
@@ -577,7 +577,7 @@ async function loadFilmOutputs(){
     for(const it of items){
       const row=document.createElement('div'); row.className='row'; row.style.cssText='padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px';
       const nm=document.createElement('span'); nm.style.cssText='font-weight:600;flex:1;min-width:220px'; nm.textContent=it.file;
-      const meta=document.createElement('span'); meta.className='small muted'; meta.textContent=(it.seconds?('⏱ '+fmtDur(it.seconds)+' · '):'')+fmtBytes(it.size)+(it.mtime?' · '+new Date(it.mtime*1000).toLocaleString('vi-VN'):'')+(it.on_desktop?' · ✅ đã có trên Máy tính':'');
+      const meta=document.createElement('span'); meta.className='small muted'; meta.textContent=(it.seconds?('⏱ '+fmtDur(it.seconds)+' · '):'')+fmtBytes(it.size)+(it.mtime?' · '+new Date(it.mtime*1000).toLocaleString('vi-VN'):'');
       const view=document.createElement('button'); view.className='btn primary'; view.textContent='▶ Xem'; view.onclick=()=>{ playMedia(it.url,'video','🎬 '+it.file,it.file); window.scrollTo({top:0,behavior:'smooth'}); };
       const dl=document.createElement('a'); dl.className='btn'; dl.textContent='⬇ Tải xuống'; dl.href=it.url; dl.download=it.file;
       row.append(nm,meta,view,dl); w.appendChild(row);
@@ -1055,7 +1055,7 @@ async function filmRun(){
         $('filmBar').style.width='100%'; setStageTxt('Hoàn thành 🎉');
         filmSay('🎉 Phim xong: '+j.result.file+' · '+j.result.seconds+' giây');
         playMedia(j.result.url, 'video', '🎬 '+title, j.result.file);
-        toast('Đã dựng xong phim: '+title+(j.result.desktop?' — đã xuất ra Máy tính':''));
+        toast('Đã dựng xong phim: '+title+' — xem trong mục Phim đã hoàn thành');
         loadFilmOutputs();
         break;
       }

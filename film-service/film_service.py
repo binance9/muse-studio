@@ -520,15 +520,13 @@ def assemble_job(job_id, payload):
         if abs(fd - total) > 2.0:
             raise RuntimeError(f"Lệch thời lượng: phim {fd:.1f}s vs tổng clip {total:.1f}s")
         log(f"✓ Phim hoàn chỉnh: {fd:.1f}s, đủ hình + tiếng, âm lượng chuẩn phát sóng")
-        desktop = copy_to_desktop(out_path, fname)
-        if desktop:
-            log(f"⬇ Đã xuất ra Máy tính: {desktop}")
-        else:
-            log("⚠ Không tìm thấy thư mục Máy tính để xuất bản sao — phim vẫn ở outputs/")
+        # phuong's rule (2026-10-24): a finished film lives IN Studio only.
+        # No automatic Desktop copy — he watches it in the app first and
+        # downloads it himself only if he approves it.
+        log("🎬 Phim đã nằm trong mục Phim đã hoàn thành của Studio — vào xem trong app, ưng thì tự tải về")
         job_update(job, status="done", stage="Hoàn thành", pct=100,
                    result={"file": fname, "seconds": round(fd, 1),
                            "size": os.path.getsize(out_path),
-                           "desktop": desktop,
                            "url": f"http://127.0.0.1:{PORT}/file/{fname}"})
     except Exception as e:
         job_log(job, "✗ " + str(e))
