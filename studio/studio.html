@@ -110,6 +110,21 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
 .hero{border:1px solid #c7d7fe;background:#f2f6ff;border-radius:10px;padding:14px;margin-top:12px}
 .steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .steps span{font-size:12px;font-weight:600;color:var(--muted);border:1px solid var(--line2);background:#fff;border-radius:999px;padding:3px 10px}
+
+/* v4.9 storyboard board (dark canvas panel) */
+#sbBoard{ margin-top:13px; background-color:#101216; border-radius:14px; padding:14px; display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; min-height:120px; background-image:radial-gradient(#23262d 1px, transparent 1px); background-size:22px 22px; }
+.sbcard{ background:#1a1d23; border:1px solid #2a2e37; border-radius:12px; padding:10px; color:#e8eaee; cursor:grab; }
+.sbcard.drag{ opacity:.45; }
+.sbhead{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.sbnum{ font-weight:700; font-size:13px; }
+.sbchip{ font-size:11px; padding:2px 8px; border-radius:20px; background:#333a45; color:#c8cdd6; }
+.sbchip.ok{ background:#14532d; color:#bbf7d0; }
+.sbchip.run{ background:#713f12; color:#fde68a; }
+.sbvid{ width:100%; border-radius:8px; background:#000; aspect-ratio:16/9; }
+.sbnov{ width:100%; aspect-ratio:16/9; border:1px dashed #3a3f4b; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#7d8590; font-size:12px; }
+.sbprompt{ font-size:12px; color:#aeb4bf; margin-top:8px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.sbline{ font-size:12px; color:#d6dae1; margin-top:4px; }
+.sbfoot{ margin-top:9px; }
 </style>
 </head>
 <body>
@@ -131,6 +146,7 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
         <a data-tab="create">✦ Tạo lẻ</a>
         <a data-tab="batch">▦ Hàng loạt</a>
         <a data-tab="library">▤ Thư viện</a>
+        <a data-tab="storyboard">🎞 Storyboard</a>
         <a href="/admin">⚙ Quản trị nâng cao</a>
       </nav>
       <div class="sidebox">
@@ -272,6 +288,17 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
       </div>
       <div class="bar hidden" id="filmBarWrap" style="margin-top:11px"><i id="filmBar" style="width:0%"></i></div>
       <div id="filmLog" class="small" style="margin-top:11px;white-space:pre-wrap;max-height:240px;overflow:auto;line-height:1.65"></div>
+    </div>
+
+    <div class="card pad" id="sbSec">
+      <div class="row"><h2>🎞 Storyboard</h2><span class="grow"></span><span class="small muted" id="sbInfo"></span></div>
+      <div class="row" style="margin-top:9px">
+        <button class="btn" id="sbSyncBtn">🔄 Đồng bộ từ kịch bản</button>
+        <button class="btn" id="sbGenBtn">▶ Tạo các cảnh còn thiếu</button>
+        <button class="btn primary" id="sbAsmBtn">🎬 Dựng phim theo thứ tự board</button>
+      </div>
+      <div id="sbBoard"></div>
+      <div class="small muted" style="margin-top:9px">Board tự liên kết với kịch bản ở tab Làm phim: nạp tập nào là board có cảnh của tập đó, cảnh đã tạo được lưu lại tự động, kéo thả thẻ để đổi thứ tự — bấm Dựng phim là ghép đúng thứ tự đó, phim xong hiện ở Thư viện như thường.</div>
     </div>
 
     <div class="card pad" id="librarySec">
@@ -853,7 +880,7 @@ $('filmCharBtn').onclick=async()=>{
   finally{ $('filmCharBtn').disabled=false; $('filmCharBtn').textContent='🎭 Tạo ảnh định trang'; }
 };
 /* ---------- v4: tabs + 1-click ---------- */
-const TAB_SECTIONS={ film:['filmSec'], create:['create'], batch:['batchSec'], library:['librarySec'] };
+const TAB_SECTIONS={ film:['filmSec'], create:['create'], batch:['batchSec'], library:['librarySec'], storyboard:['sbSec'] };
 function showTab(name){
   for(const k in TAB_SECTIONS) TAB_SECTIONS[k].forEach(id=>{ const el=$(id); if(el) el.classList.toggle('hidden', k!==name); });
   const stage=document.querySelector('.stagebox'); if(stage) stage.classList.toggle('hidden', name!=='create');
@@ -1067,6 +1094,91 @@ async function filmRun(){
     $('filmRunBtn').disabled=false;
   }
 }
+
+/* ---------- v4.9: Storyboard board — canvas-style, auto-linked to the film pipeline ---------- */
+let sbScenes=[]; let sbBusy=false; let sbDragIx=-1;
+function sbKey(){ const t=($('filmTitle').value.trim()||'Phim của tôi'); let h=0; for(let i=0;i<t.length;i++){ h=(h*31+t.charCodeAt(i))|0; } return 'sboard_'+(h>>>0).toString(36); }
+function sbSave(){ try{ localStorage.setItem(sbKey(), JSON.stringify(sbScenes.map(x=>({prompt:x.prompt, thoai:x.thoai, file:x.file||null})))); }catch(e){} }
+function sbLoad(){ try{ return JSON.parse(localStorage.getItem(sbKey())||'[]'); }catch(e){ return []; } }
+function sbStatus(){ const done=sbScenes.filter(x=>x.file).length; const el=$('sbInfo'); if(el) el.textContent=sbScenes.length? (done+'/'+sbScenes.length+' cảnh đã có video · kéo thả thẻ để đổi thứ tự dựng') : 'Chưa có cảnh — nạp kịch bản ở tab Làm phim rồi quay lại đây'; }
+async function sbSync(manual){
+  if(!$('filmScript').value.trim() && window._inboxItems && window._inboxItems.length){ await filmInboxLoad(0); }
+  filmScenes=parseFilmScript(); renderFilmVoiceMap();
+  const saved=sbLoad(); const byPrompt={}; saved.forEach(x=>{ byPrompt[x.prompt]=x; });
+  const fresh=filmScenes.map(x=>({ prompt:x.prompt, thoai:(x.thoai||[]).map(t=>({speaker:t.speaker, line:t.line})), file:(byPrompt[x.prompt]&&byPrompt[x.prompt].file)||null }));
+  const ordered=[]; const used=new Set();
+  saved.forEach(sv=>{ const f=fresh.find(x=>x.prompt===sv.prompt); if(f){ ordered.push(f); used.add(f.prompt); } });
+  fresh.forEach(f=>{ if(!used.has(f.prompt)) ordered.push(f); });
+  sbScenes=ordered; sbSave(); sbRender();
+  if(manual) toast(sbScenes.length? ('Đã đồng bộ '+sbScenes.length+' cảnh từ kịch bản') : 'Chưa đọc được cảnh nào — kiểm tra kịch bản ở tab Làm phim', !sbScenes.length);
+}
+function sbRender(){
+  const w=$('sbBoard'); if(!w) return; w.innerHTML='';
+  sbScenes.forEach((sc,i)=>{
+    const card=document.createElement('div'); card.className='sbcard'; card.draggable=true; card.dataset.ix=i;
+    const th=(sc.thoai||[]).map(t=>'<div class="sbline"><b>'+esc(t.speaker)+':</b> '+esc(t.line)+'</div>').join('');
+    card.innerHTML='<div class="sbhead"><span class="sbnum">Cảnh '+(i+1)+'</span><span class="sbchip '+(sc.file?'ok':'wait')+'">'+(sc.file?'✓ đã có video':'chưa tạo')+'</span></div>'
+      +(sc.file? '<video class="sbvid" src="/v1/media/'+sc.file+'" preload="metadata" controls muted playsinline></video>' : '<div class="sbnov">Chưa có video — bấm Tạo cảnh này</div>')
+      +'<div class="sbprompt">'+esc(sc.prompt)+'</div>'+(th||'<div class="sbline" style="color:#7d8590">— không thoại —</div>')
+      +'<div class="sbfoot"><button class="btn small" data-act="gen">'+(sc.file?'↻ Tạo lại cảnh này':'▶ Tạo cảnh này')+'</button></div>';
+    card.querySelector('[data-act="gen"]').onclick=()=>sbGenScene(i);
+    card.addEventListener('dragstart', e=>{ sbDragIx=i; card.classList.add('drag'); try{ e.dataTransfer.effectAllowed='move'; }catch(_){} });
+    card.addEventListener('dragend', ()=>{ sbDragIx=-1; sbSave(); sbRender(); });
+    card.addEventListener('dragover', e=>{ e.preventDefault(); if(sbDragIx>=0 && sbDragIx!==i){ const mv=sbScenes.splice(sbDragIx,1)[0]; sbScenes.splice(i,0,mv); sbDragIx=i; sbRender(); } });
+    w.appendChild(card);
+  });
+  sbStatus();
+}
+function sbFullPrompt(p){ const sp=($('filmStyleSel')&&$('filmStyleSel').value==='family')?STYLE_FAMILY:''; return (sp && !p.includes(sp.slice(0,40)))? (sp+' '+p) : p; }
+function sbSetChip(i,txt){ const c=document.querySelector('#sbBoard .sbcard[data-ix="'+i+'"] .sbchip'); if(c){ c.textContent=txt; c.className='sbchip run'; } }
+async function sbGenScene(i){
+  if(sbBusy){ toast('Đang tạo một cảnh khác — đợi xong đã', true); return; }
+  const sc=sbScenes[i]; if(!sc) return;
+  sbBusy=true; sbSetChip(i,'đang tạo…');
+  try{
+    const vb={ prompt: sbFullPrompt(sc.prompt), duration:Number($('durSel').value), account_id:$('accountSel').value||null,
+      size:$('sizeSel').value, generation_mode:'independent', prompt_language:'auto', ...charRefsPayload() };
+    let vurl=null, err=null;
+    for(let a=0;a<6&&!vurl;a++){
+      try{ const d=await api('/v1/videos', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(vb)}); vurl=await filmPoll('video', d.id||d.task_id, 'Video cảnh '+(i+1)); }
+      catch(e){ err=e; if(a<5) await new Promise(r=>setTimeout(r,20000)); }
+    }
+    if(!vurl) throw err||new Error('không tạo được video');
+    sc.file=vurl.split('/').pop(); sbSave(); sbRender(); loadLibrary();
+    toast('✓ Cảnh '+(i+1)+' xong: '+sc.file);
+  }catch(e){ toast('Cảnh '+(i+1)+' lỗi: '+e.message, true); sbRender(); }
+  finally{ sbBusy=false; }
+}
+async function sbGenMissing(){
+  if(sbBusy){ toast('Đang bận tạo cảnh — đợi xong đã', true); return; }
+  if(!sbScenes.length){ await sbSync(false); }
+  for(let i=0;i<sbScenes.length;i++){ if(!sbScenes[i].file) await sbGenScene(i); }
+  if(sbScenes.length) toast('Đã tạo xong các cảnh còn thiếu');
+}
+async function sbAssemble(){
+  if(!sbScenes.length){ toast('Chưa có cảnh nào trên board', true); return; }
+  const missing=sbScenes.map((x,i)=>x.file?0:i+1).filter(Boolean);
+  if(missing.length){ toast('Còn thiếu video ở cảnh: '+missing.join(', ')+' — tạo đủ rồi mới dựng được', true); return; }
+  const title=$('filmTitle').value.trim()||'Phim của tôi';
+  const btn=$('sbAsmBtn'); btn.disabled=true; btn.textContent='Đang dựng…';
+  try{
+    const job=await filmApi('/assemble', { title, signature:'by prompt Thaovy19T', music:{auto:true, volume:0.35}, edit:{transition:'fade', duration:0.6, title:true},
+      scenes: sbScenes.map(sc=>({ file: sc.file, voice: filmVoiceOf('Người kể chuyện'), dialogue:(sc.thoai||[]).map(t=>({speaker:t.speaker, line:t.line, voice: filmVoiceOf(t.speaker)})) })) });
+    for(let k=0;k<240;k++){
+      await new Promise(r=>setTimeout(r,4000));
+      const r=await fetch(FILM_API+'/job/'+job.job_id); const j=await r.json();
+      if(j.status==='done'){ toast('🎉 Phim xong: '+j.result.file+' · '+j.result.seconds+' giây — xem ở Thư viện'); playMedia(j.result.url,'video','🎬 '+title, j.result.file); loadFilmOutputs(); break; }
+      if(j.status==='failed') throw new Error(j.error||'Dịch vụ dựng phim báo lỗi');
+      if(k===239) throw new Error('Dựng quá lâu — kiểm tra lại trong Thư viện');
+    }
+  }catch(e){ toast('Dựng phim lỗi: '+e.message, true); }
+  finally{ btn.disabled=false; btn.textContent='🎬 Dựng phim theo thứ tự board'; }
+}
+$('sbSyncBtn').onclick=()=>sbSync(true);
+$('sbGenBtn').onclick=sbGenMissing;
+$('sbAsmBtn').onclick=sbAssemble;
+document.querySelector('.nav a[data-tab="storyboard"]').addEventListener('click', ()=>setTimeout(()=>{ sbSync(false); }, 60));
+
 $('filmRunBtn').onclick=filmRun;
 
 </script>
