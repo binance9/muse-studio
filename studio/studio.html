@@ -143,6 +143,7 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
       <div class="brand"><div class="logo">✦</div><div><div class="name">Muse Studio</div><div class="sub">Tạo video &amp; ảnh bằng Muse</div></div></div>
       <nav class="nav">
         <a data-tab="film" class="on">🎬 Làm phim 1-click</a>
+        <a data-tab="aifilm">🤖 Tạo phim AI</a>
         <a data-tab="create">✦ Tạo lẻ</a>
         <a data-tab="batch">▦ Hàng loạt</a>
         <a data-tab="library">▤ Thư viện</a>
@@ -289,6 +290,23 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
       </div>
       <div class="bar hidden" id="filmBarWrap" style="margin-top:11px"><i id="filmBar" style="width:0%"></i></div>
       <div id="filmLog" class="small" style="margin-top:11px;white-space:pre-wrap;max-height:240px;overflow:auto;line-height:1.65"></div>
+    </div>
+
+    <div class="card pad hidden" id="aiSec">
+      <div class="row"><h2>🤖 Tạo phim AI — từ ý tưởng thành phim</h2><span class="grow"></span><span class="small muted">Muse là não AI duy nhất · mày không cần thao tác giữa chừng</span></div>
+      <div id="aiResumeBar" class="hidden" style="background:#fff7e6;border:1px solid #e8b93c;border-radius:10px;padding:9px 12px;margin:10px 0"></div>
+      <label class="small muted" style="display:block;margin-top:8px">Ý tưởng của mày (một câu cũng được — hệ thống tự viết kịch bản, chia cảnh, tạo và khóa nhân vật, lồng thoại gốc, nhạc nền, dựng phim, kiểm tra chất lượng và tự sửa cảnh lỗi)</label>
+      <textarea id="aiIdea" rows="3" style="width:100%;margin-top:5px" placeholder="Ví dụ: Gia đình bán phở ở phố cổ, ba muốn con trai nối nghiệp nhưng con mơ làm họa sĩ, câu chuyện cảm động về sự thấu hiểu"></textarea>
+      <div class="row" style="margin-top:9px;gap:8px;flex-wrap:wrap">
+        <input id="aiProject" style="flex:1;min-width:220px" placeholder="Tên dự án / bộ phim (giữ nhân vật + giọng cho các tập sau)">
+        <select id="aiMinutes" title="Thời lượng phim"><option value="2">~2 phút</option><option value="4" selected>~4 phút</option><option value="6">~6 phút</option><option value="10">~10 phút</option></select>
+        <select id="aiAccent" title="Giọng thoại"><option value="Northern">Giọng Bắc</option><option value="Southern">Giọng Nam</option></select>
+        <button class="btn primary big" id="aiRunBtn">🎬 TẠO PHIM</button>
+      </div>
+      <div id="aiStages" style="margin-top:12px"></div>
+      <div id="aiScenes" style="margin-top:8px"></div>
+      <div id="aiLog" class="small" style="margin-top:10px;white-space:pre-wrap;background:#0f172a;color:#dbeafe;border-radius:10px;padding:11px 13px;max-height:300px;overflow:auto"></div>
+      <div class="small muted" style="margin-top:8px">Tiến độ tự lưu liên tục (trong máy + trên dịch vụ dựng phim): tắt Studio mở lại là tự chạy tiếp. Nhân vật của một dự án được khóa bằng ảnh định trang riêng — làm tập tiếp theo chỉ cần giữ nguyên Tên dự án, hệ thống tự dùng lại đúng dàn nhân vật và giọng cũ.</div>
     </div>
 
     <div class="card pad" id="sbSec">
@@ -889,7 +907,7 @@ $('filmCharBtn').onclick=async()=>{
   finally{ $('filmCharBtn').disabled=false; $('filmCharBtn').textContent='🎭 Tạo ảnh định trang'; }
 };
 /* ---------- v4: tabs + 1-click ---------- */
-const TAB_SECTIONS={ film:['filmSec'], create:['create'], batch:['batchSec'], library:['librarySec'], storyboard:['sbSec'] };
+const TAB_SECTIONS={ film:['filmSec'], aifilm:['aiSec'], create:['create'], batch:['batchSec'], library:['librarySec'], storyboard:['sbSec'] };
 function showTab(name){
   for(const k in TAB_SECTIONS) TAB_SECTIONS[k].forEach(id=>{ const el=$(id); if(el) el.classList.toggle('hidden', k!==name); });
   const stage=document.querySelector('.stagebox'); if(stage) stage.classList.toggle('hidden', name!=='create');
@@ -1231,6 +1249,315 @@ function sbComfyCheck(){
   }).catch(()=>{ el.textContent='⚪ ComfyUI: không rõ'; });
 }
 sbComfyCheck(); setInterval(sbComfyCheck, 60000);
+
+/* ================= v6.0 AI FILM ENGINE =================
+   Muse is the only AI: it writes faces, motion and voices remotely.
+   This engine (part of Muse Studio itself) turns ONE idea into a full
+   production: parse idea -> cast -> script with shot variety -> character
+   sheet -> scenes -> QC gate with auto-fix -> assemble. Progress is saved
+   locally AND on film-service (/projects) so a series keeps its cast and
+   an interrupted run resumes where it stopped. */
+/*AIFILM_ENGINE_START*/
+const AI_SHOTS=['wide establishing shot','medium shot','close-up shot','over-the-shoulder shot','action shot','two-shot','side profile shot','gentle tracking shot'];
+const AI_EMO={warm:'warm and heartfelt',sad:'quietly sad',worried:'worried and tense',happy:'bright and joyful',determined:'firm and determined',tender:'tender and emotional',serious:'serious and sincere',calm:'calm and gentle'};
+function aiParseIdea(text){
+  const t=' '+(text||'').toLowerCase()+' ';
+  let genre='drama';
+  if(/(gia đình|ba |mẹ |cha |con trai|con gái|anh em|chị em|quán|phở|nối nghiệp)/.test(t)) genre='family';
+  else if(/(mèo|chó|thú cưng|động vật)/.test(t)) genre='animals';
+  else if(/(phiêu lưu|kho báu|du hành|khám phá|rừng)/.test(t)) genre='adventure';
+  else if(/(tình yêu|yêu thầm|crush|hẹn hò)/.test(t)) genre='romance';
+  else if(/(hài|cười|vui nhộn|tấu)/.test(t)) genre='comedy';
+  let craft={vi:'quán cơm gia đình',en:'a small family eatery'};
+  if(/phở|bún|mì/.test(t)) craft={vi:'quán phở gia truyền',en:'a family pho noodle shop'};
+  else if(/đèn lồng/.test(t)) craft={vi:'xưởng đèn lồng',en:'a silk lantern workshop'};
+  else if(/sửa xe/.test(t)) craft={vi:'tiệm sửa xe',en:'a motorbike repair shop'};
+  else if(/bánh/.test(t)) craft={vi:'tiệm bánh gia đình',en:'a family bakery'};
+  else if(/may |thợ may/.test(t)) craft={vi:'xưởng may',en:'a family tailoring workshop'};
+  else if(/cà phê/.test(t)) craft={vi:'quán cà phê',en:'a small family coffee shop'};
+  let dream='theo đuổi đam mê riêng';
+  if(/họa sĩ|vẽ|tranh/.test(t)) dream='làm họa sĩ';
+  else if(/ca sĩ|hát|nhạc/.test(t)) dream='làm ca sĩ';
+  else if(/đầu bếp|nấu ăn/.test(t)) dream='làm đầu bếp';
+  else if(/kỹ sư/.test(t)) dream='làm kỹ sư';
+  else if(/du học/.test(t)) dream='đi du học';
+  else if(/cầu thủ|bóng đá/.test(t)) dream='làm cầu thủ bóng đá';
+  else if(/nhiếp ảnh|chụp ảnh/.test(t)) dream='làm nhiếp ảnh gia';
+  else if(/đèn lồng/.test(t)) dream='làm đèn lồng nghệ thuật';
+  let setting={vi:'phố cổ',en:'a Vietnamese old town'};
+  if(/hội an/.test(t)) setting={vi:'Hội An',en:'Hoi An old town'};
+  else if(/làng quê|làng /.test(t)) setting={vi:'làng quê',en:'a Vietnamese countryside village'};
+  else if(/biển|đảo/.test(t)) setting={vi:'vùng biển',en:'a Vietnamese seaside town'};
+  else if(/sài gòn/.test(t)) setting={vi:'Sài Gòn',en:'Saigon'};
+  else if(/hà nội/.test(t)) setting={vi:'phố cổ Hà Nội',en:'Hanoi old quarter'};
+  const dreamerMale=!/con gái/.test(t);
+  return {genre, craft, dream, setting, dreamerMale};
+}
+function aiBuildCast(p){
+  if(p.genre==='family'){
+    return [
+      {id:'ba', name:'Ba', gender:'male', age:'adult', voiceDesc:'a 50-year-old man', desc:'a 50-year-old Vietnamese father, weathered kind face, short greying hair, wearing a faded navy work shirt and a dark apron'},
+      {id:'me', name:'Mẹ', gender:'female', age:'adult', voiceDesc:'a 47-year-old woman', desc:'a 47-year-old Vietnamese mother, gentle warm face, black hair in a low bun, wearing a mustard cardigan over a blouse and a brown apron'},
+      p.dreamerMale
+        ? {id:'con', name:'Con trai', gender:'male', age:'teen', voiceDesc:'a 19-year-old young man', desc:'a 19-year-old Vietnamese young man, bright thoughtful eyes, neat short black hair, wearing an olive hoodie, a sketchbook under his arm'}
+        : {id:'con', name:'Con gái', gender:'female', age:'teen', voiceDesc:'a 19-year-old young woman', desc:'a 19-year-old Vietnamese young woman, bright thoughtful eyes, long black hair in a ponytail, wearing an olive hoodie, a sketchbook under her arm'},
+      {id:'em', name:'Em', gender:'female', age:'child', voiceDesc:'a 12-year-old girl', desc:'a 12-year-old Vietnamese girl, cheerful round face, two braids, wearing a yellow t-shirt'}
+    ];
+  }
+  return [
+    {id:'chinh', name:'Nhân vật chính', gender:p.dreamerMale?'male':'female', age:'adult', voiceDesc:'a 25-year-old '+(p.dreamerMale?'man':'woman'), desc:'a 25-year-old Vietnamese '+(p.dreamerMale?'man, short black hair, wearing a denim jacket over a white t-shirt':'woman, long black hair, wearing a denim jacket over a white blouse')},
+    {id:'ban', name:'Bạn thân', gender:'female', age:'adult', voiceDesc:'a 24-year-old woman', desc:'a 24-year-old Vietnamese woman, lively face, shoulder-length hair, wearing a rust-orange sweater'},
+    {id:'bac', name:'Bác lớn tuổi', gender:'male', age:'elder', voiceDesc:'an elderly man', desc:'a 68-year-old Vietnamese elder, kind wrinkled face, grey hair, wearing a brown traditional shirt'}
+  ];
+}
+function aiSheetPrompt(cast){
+  const parts=cast.map((c,i)=>(i+1)+') '+c.desc).join('; ');
+  return 'Character lineup reference sheet, '+cast.length+' characters standing side by side in a row, full body, on a plain light-grey studio background, soft even lighting, photorealistic, sharp facial details, each in their signature outfit with a neutral gentle expression: '+parts+'. 16:9.';
+}
+const AI_FAMILY_BEATS=[
+ {shot:0,emo:'calm',act:'Early morning at {craftEn} in {settingEn}; the father opens the shop shutters as warm light spills in, steam rising from a big pot.',lines:[['ba','Dậy sớm quen rồi, quán mình mở từ năm giờ.']]},
+ {shot:1,emo:'warm',act:'Inside the shop, the mother arranges tables and fresh herbs, smiling at the new day.',lines:[['me','Hôm nay trời đẹp, chắc khách sẽ đông.']]},
+ {shot:2,emo:'tender',act:'The young dreamer sits in a corner with a sketchbook, quietly drawing the shop instead of helping.',lines:[['con','Ước gì mình được sống với đam mê này.']]},
+ {shot:4,emo:'happy',act:'The shop is suddenly full of customers; the whole family serves together in cheerful chaos.',lines:[['em','Anh hai ơi, phụ em bưng bàn này với!']]},
+ {shot:5,emo:'serious',act:'The father hands the dreamer an apron with a firm look, teaching the family trade.',lines:[['ba','Lớn rồi, phải học lấy cái nghề của nhà mình.']]},
+ {shot:2,emo:'sad',act:'Close on the dreamer, holding the apron, eyes down, torn between duty and dream.',lines:[['con','Nhưng con muốn thử con đường của riêng con.']]},
+ {shot:0,emo:'tender',act:'Night: the empty shop glows softly; the dreamer alone at a table, drawing under a small lamp.',lines:[['con','Chỉ lúc này, mình mới là chính mình.']]},
+ {shot:3,emo:'worried',act:'The mother watches the dreamer from the doorway, sighing softly, worried.',lines:[['me','Nó giống ba nó hồi trẻ, cứng đầu lắm.']]},
+ {shot:4,emo:'worried',act:'A sudden problem in the shop — a broken pipe sprays water; the family rushes to fix it together.',lines:[['ba','Bình tĩnh, nhà mình cùng nhau lo.']]},
+ {shot:2,emo:'happy',act:'Close on the dreamer painting a beautiful new signboard for the shop, fully absorbed.',lines:[['em','Anh làm đẹp quá, khách chụp ảnh quá trời!']]},
+ {shot:1,emo:'happy',act:'Customers admire the new signboard and take photos; the mother beams with pride.',lines:[['me','Thấy chưa, đam mê của con có ích đó!']]},
+ {shot:5,emo:'serious',act:'The father stands before the signboard in silence, arms crossed, thinking deeply.',lines:[['ba','Ừ... để ba suy nghĩ thêm.']]},
+ {shot:0,emo:'worried',act:'A rainy night: water drips through the old roof into buckets while the family eats quietly.',lines:[['me','Mái dột nữa rồi, khổ thân cái quán này.']]},
+ {shot:2,emo:'sad',act:'Close on the tired father rubbing his face, the weight of the family on his shoulders.',lines:[['ba','Ba chỉ sợ các con khổ như ba mẹ thôi.']]},
+ {shot:1,emo:'tender',act:'The dreamer sits beside the father and speaks gently, hand on his shoulder.',lines:[['con','Con biết ba thương con. Con không bỏ nhà mình đâu.']]},
+ {shot:7,emo:'determined',act:'The dreamer leads a small renovation: painting walls, fixing the sign, decorating with drawings.',lines:[['con','Để con làm cho quán mình đẹp hơn.']]},
+ {shot:2,emo:'tender',act:'Close on the mother watching the renewed shop, eyes wet, smiling through emotion.',lines:[['me','Có con cái hiểu mình, mệt mấy cũng đáng.']]},
+ {shot:0,emo:'happy',act:'The renewed shop is packed with happy customers; the family serves with energy.',lines:[['em','Đông quá, con bưng không kịp luôn!']]},
+ {shot:5,emo:'serious',act:'Evening two-shot: father and dreamer talk honestly across a small table, faces close.',lines:[['ba','Ba không cấm nữa. Làm gì cũng làm đến nơi, nghe con.']]},
+ {shot:2,emo:'tender',act:'Close on the dreamer, eyes shining with tears, nodding with a relieved smile.',lines:[['con','Con hứa. Cảm ơn ba đã hiểu con.']]},
+ {shot:1,emo:'warm',act:'A warm family dinner at the shop after closing, everyone laughing over full bowls.',lines:[['me','Nhà mình còn ngồi ăn với nhau là còn phúc.']]},
+ {shot:6,emo:'happy',act:'The dreamer teaches the little sister to draw at the family table, both giggling.',lines:[['em','Mai mốt anh dạy em nữa nha!']]},
+ {shot:0,emo:'calm',act:'Golden hour wide shot: the beautiful little shop glows; the father surveys it proudly.',lines:[['ba','Quán này rồi là của các con, theo cách của các con.']]},
+ {shot:5,emo:'warm',act:'The whole family stands together looking at their shop, smiling at each other.',lines:[['con','Nhà mình còn nói chuyện được với nhau là còn tất cả.']]},
+ {shot:0,emo:'tender',act:'Final wide shot at night: the shop lit warm like a lantern, the family in the doorway waving gently.',lines:[['me','Thôi, vào ăn cơm. Mai lại là một ngày mới.']]}
+];
+const AI_GENERIC_BEATS=[
+ {shot:0,emo:'calm',act:'Opening wide shot in {settingEn}; the main character starts an ordinary morning.',lines:[['chinh','Một ngày mới lại bắt đầu rồi.']]},
+ {shot:1,emo:'warm',act:'The main character meets the close friend and shares a long-held dream.',lines:[['chinh','Mình muốn thử một lần sống thật với ước mơ.']]},
+ {shot:2,emo:'serious',act:'Close on the friend, encouraging but honest.',lines:[['ban','Khó lắm đó, nhưng không thử sao biết.']]},
+ {shot:4,emo:'determined',act:'The main character begins the work with full effort, small steps each day.',lines:[['chinh','Dù chậm, mình cũng không bỏ cuộc.']]},
+ {shot:1,emo:'worried',act:'A first failure hits; the main character sits quietly, discouraged.',lines:[['chinh','Sao mọi chuyện khó hơn mình tưởng.']]},
+ {shot:5,emo:'tender',act:'The old mentor appears with tea and a story from his own youth.',lines:[['bac','Hồi trẻ bác cũng từng ngã như cháu.']]},
+ {shot:2,emo:'tender',act:'Close on the main character listening, eyes lighting up again.',lines:[['chinh','Cháu hiểu rồi. Ngã thì đứng dậy thôi.']]},
+ {shot:4,emo:'determined',act:'Working montage: the main character improves day by day, the friend helping alongside.',lines:[['ban','Đó, thấy chưa, khá hơn nhiều rồi!']]},
+ {shot:0,emo:'happy',act:'The small achievement is noticed by people around; warm reactions.',lines:[['bac','Cứ chân thành, trời sẽ không phụ.']]},
+ {shot:5,emo:'warm',act:'The three share a simple meal, talking and laughing together.',lines:[['chinh','Có mọi người bên cạnh, cháu không sợ gì nữa.']]},
+ {shot:1,emo:'happy',act:'A joyful moment of recognition; the main character smiles with tears of happiness.',lines:[['ban','Mình biết cậu làm được mà!']]},
+ {shot:0,emo:'tender',act:'Final wide shot at golden hour; the main character looks ahead with quiet confidence.',lines:[['chinh','Hóa ra, bắt đầu chưa bao giờ là muộn.']]}
+];
+function aiPickBeats(beats, n){
+  if(n===beats.length) return beats.slice();
+  if(n<beats.length){
+    const out=[beats[0]]; const step=(beats.length-2)/(n-2);
+    for(let i=1;i<n-1;i++) out.push(beats[1+Math.round(step*(i-1)+1e-6)]||beats[i]);
+    out.push(beats[beats.length-1]);
+    return out.slice(0,n);
+  }
+  const out=beats.slice();
+  let k=0;
+  while(out.length<n){ out.splice(out.length-1,0,beats[3+(k%(beats.length-6))]); k++; }
+  return out;
+}
+function aiBuildScript(p, cast, nScenes){
+  const beats=aiPickBeats(p.genre==='family'?AI_FAMILY_BEATS:AI_GENERIC_BEATS, nScenes);
+  const byId={}; cast.forEach(c=>byId[c.id]=c);
+  return beats.map((b,i)=>({
+    idx:i,
+    shot:AI_SHOTS[(b.shot!=null?b.shot:i)%AI_SHOTS.length],
+    emo:b.emo||'warm',
+    action:b.act.replaceAll('{craftEn}',p.craft.en).replaceAll('{settingEn}',p.setting.en),
+    lines:(b.lines||[]).map(([who,text])=>({who, name:(byId[who]||{}).name||who, text}))
+  }));
+}
+function aiDirectiveFor(scene, castById, accent){
+  if(!scene.lines || !scene.lines.length) return '';
+  const acc=accent==='Southern'?'natural Southern Vietnamese accent':'natural Northern Vietnamese accent';
+  const emo=AI_EMO[scene.emo]||'warm and heartfelt';
+  const parts=scene.lines.map(l=>{ const c=castById[l.who]||{}; return (c.voiceDesc||'a person')+' ('+l.name+') says exactly: "'+l.text+'"'; });
+  const perf='The voices are alive and human — natural pauses, rising and falling intonation, '+emo+' emotion, never flat or robotic. Lips move precisely with every Vietnamese syllable. While speaking: eyes blink and glance naturally, eyebrows and facial muscles express the feeling, the head tilts slightly, hands gesture gently, breathing is visible — the whole body feels alive, never stiff or frozen. No music under the voices.';
+  if(parts.length===1) return ' SPEECH AND PERFORMANCE: The character SPEAKS ALOUD in Vietnamese with a '+acc+', '+parts[0]+'. '+perf;
+  return ' SPEECH AND PERFORMANCE: The characters SPEAK ALOUD in Vietnamese with '+acc+'s, taking turns with NO overlapping speech: '+parts.join('. Then ')+'. '+perf;
+}
+const AI_STYLE_PREFIX='Photorealistic cinematic Vietnamese drama film, the same consistent characters as the reference sheet, warm natural light, gentle realistic colors, no subtitles, no on-screen text, no logos.';
+/*AIFILM_ENGINE_END*/
+
+
+/* ---------- v6.0 AI Film UI runner ---------- */
+const AI_STAGES=['Phân tích ý tưởng','Viết kịch bản','Tạo & khóa nhân vật','Tạo các cảnh','Kiểm tra chất lượng','Dựng phim','Hoàn thành'];
+let aiBusy=false, aiState=null, aiResumeTimer=null;
+function aiSlug(s){ return (s||'phim-ai').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,48)||'phim-ai'; }
+function aiLogSay(m){ const el=$('aiLog'); if(el){ el.textContent+=(el.textContent?'\n':'')+m; el.scrollTop=el.scrollHeight; } }
+function aiRenderStages(cur, failed){
+  const w=$('aiStages'); if(!w) return;
+  w.innerHTML=AI_STAGES.map((s,i)=>{
+    const st=i<cur?'done':(i===cur?(failed?'fail':'run'):'wait');
+    const dot=st==='done'?'✅':(st==='run'?'🔄':(st==='fail'?'⛔':'⚪'));
+    return '<span style="display:inline-block;margin:2px 8px 2px 0" class="small">'+dot+' '+s+'</span>';
+  }).join('');
+}
+function aiRenderScenes(){
+  const w=$('aiScenes'); if(!w || !aiState) return;
+  w.innerHTML=aiState.script.map((sc,i)=>{
+    const f=aiState.files[i];
+    const st=f?'<span style="color:#1a9e4b">✅ '+f+'</span>':(aiState.current===i?'<span style="color:#d78b00">🔄 đang tạo…</span>':'<span class="muted">⚪ chờ</span>');
+    return '<div class="small" style="padding:3px 0;border-bottom:1px dashed var(--line)">Cảnh '+(i+1)+' · '+sc.shot+' — '+st+'</div>';
+  }).join('');
+}
+async function aiPersist(){
+  if(!aiState) return;
+  try{ localStorage.setItem('aifilm_'+aiState.key, JSON.stringify(aiState)); localStorage.setItem('aifilm_active', aiState.key); }catch(e){}
+  try{ await filmApi('/projects', {key: aiState.key, project: aiState}); }catch(e){}
+}
+async function aiMediaDataURL(file){
+  const r=await fetch('/v1/media/'+file); const b=await r.blob();
+  return await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b); });
+}
+async function aiGenWithRetry(makeBody, kind, label){
+  let lastErr=null;
+  for(let att=1; att<=6; att++){
+    try{
+      const d=await api(kind==='video'?'/v1/videos':'/v1/images/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(makeBody())});
+      const url=await filmPoll(kind, d.id||d.task_id, label);
+      return url.split('/').pop();
+    }catch(e){ lastErr=e; aiLogSay('⚠ '+label+' lần '+att+' lỗi ('+e.message+') — thử lại sau 20 giây'); await new Promise(r=>setTimeout(r,20000)); }
+  }
+  throw lastErr||new Error(label+' thất bại');
+}
+async function aiRunFilm(resume){
+  if(aiBusy) return;
+  const idea=resume? resume.idea : $('aiIdea').value.trim();
+  if(!idea){ toast('Nhập ý tưởng trước đã', true); return; }
+  aiBusy=true; const btn=$('aiRunBtn'); btn.disabled=true; btn.textContent='ĐANG LÀM PHIM…';
+  try{
+    const minutes=resume? resume.minutes : Number($('aiMinutes').value||4);
+    const accent=resume? resume.accent : $('aiAccent').value;
+    const nScenes=Math.max(6, Math.round(minutes*60/9.55));
+    const parsed=aiParseIdea(idea);
+    const key=resume? resume.key : aiSlug(($('aiProject').value.trim()||idea));
+    const title=resume? resume.title : ($('aiProject').value.trim() || ('Phim AI — '+idea.slice(0,42)));
+    aiRenderStages(0);
+    aiLogSay('🧠 Ý tưởng: '+idea);
+    aiLogSay('→ Thể loại: '+parsed.genre+' · Nghề gia đình: '+parsed.craft.vi+' · Ước mơ: '+parsed.dream+' · Bối cảnh: '+parsed.setting.vi+' · Số cảnh: '+nScenes+' (~'+minutes+' phút)');
+    if(resume && resume.script && resume.cast){
+      aiState=resume;
+      aiLogSay('↩ Tiếp tục dự án đang dở: '+aiState.files.filter(Boolean).length+'/'+aiState.script.length+' cảnh đã có');
+    } else {
+      const cast=aiBuildCast(parsed);
+      const script=aiBuildScript(parsed, cast, nScenes);
+      aiState={key, title, idea, minutes, accent, parsed, cast, script, sheetFile:null, files:new Array(nScenes).fill(null), stage:'script', filmFile:null, createdAt:Date.now()};
+      aiRenderStages(1);
+      aiLogSay('✍ Đã viết kịch bản '+script.length+' cảnh, '+cast.length+' nhân vật: '+cast.map(c=>c.name).join(', '));
+    }
+    const castById={}; aiState.cast.forEach(c=>castById[c.id]=c);
+    await aiPersist();
+    /* --- character sheet: reuse the locked sheet for this project/series --- */
+    aiRenderStages(2);
+    if(!aiState.sheetFile){
+      const saved=await aiLoadProject(key);
+      if(saved && saved.sheetFile && saved.cast && JSON.stringify(saved.cast)===JSON.stringify(aiState.cast)){
+        aiState.sheetFile=saved.sheetFile;
+        aiLogSay('🎭 Dùng lại ảnh nhân vật ĐÃ KHÓA của dự án này: '+aiState.sheetFile+' (giữ nhất quán cho cả bộ phim)');
+      }
+    }
+    if(!aiState.sheetFile){
+      aiLogSay('🎭 Đang tạo ảnh định trang khóa nhân vật…');
+      aiState.sheetFile=await aiGenWithRetry(()=>({prompt: aiSheetPrompt(aiState.cast), account_id:$('accountSel').value||null, model:'muse-image', n:1, size:$('sizeSel').value, generation_mode:'independent', prompt_language:'auto', response_format:'url'}), 'image', 'Ảnh định trang');
+      aiLogSay('🎭 Đã khóa nhân vật: '+aiState.sheetFile);
+    }
+    aiState.stage='scenes'; await aiPersist();
+    const sheetURL=await aiMediaDataURL(aiState.sheetFile);
+    /* --- scenes --- */
+    aiRenderStages(3); aiRenderScenes();
+    for(let i=0;i<aiState.script.length;i++){
+      if(aiState.files[i]) continue;
+      aiState.current=i; aiRenderScenes();
+      const sc=aiState.script[i];
+      const prompt=AI_STYLE_PREFIX+' '+sc.shot+'. '+sc.action+aiDirectiveFor(sc, castById, aiState.accent);
+      aiLogSay('🎬 Cảnh '+(i+1)+'/'+aiState.script.length+' ('+sc.shot+')…');
+      aiState.files[i]=await aiGenWithRetry(()=>({prompt, duration:Number($('durSel').value), account_id:$('accountSel').value||null, size:$('sizeSel').value, generation_mode:'independent', prompt_language:'auto', reference_images:[sheetURL], reference_roles:['character']}), 'video', 'Cảnh '+(i+1));
+      aiLogSay('✅ Cảnh '+(i+1)+': '+aiState.files[i]);
+      aiState.current=-1; aiRenderScenes(); await aiPersist();
+    }
+    /* --- QC gate: probe every clip, auto-regenerate the bad ones once --- */
+    aiRenderStages(4);
+    aiLogSay('🔍 Kiểm tra chất lượng '+aiState.files.length+' cảnh…');
+    let qc=await filmApi('/qc', {files: aiState.files});
+    if(qc.bad && qc.bad.length){
+      aiLogSay('⚠ Cảnh lỗi: '+qc.bad.join(', ')+' — tự tạo lại…');
+      for(const badFile of qc.bad){
+        const i=aiState.files.indexOf(badFile); if(i<0) continue;
+        const sc=aiState.script[i];
+        const prompt=AI_STYLE_PREFIX+' '+sc.shot+'. '+sc.action+aiDirectiveFor(sc, castById, aiState.accent);
+        aiState.files[i]=await aiGenWithRetry(()=>({prompt, duration:Number($('durSel').value), account_id:$('accountSel').value||null, size:$('sizeSel').value, generation_mode:'independent', prompt_language:'auto', reference_images:[sheetURL], reference_roles:['character']}), 'video', 'Tạo lại cảnh '+(i+1));
+        aiLogSay('♻ Đã tạo lại cảnh '+(i+1)+': '+aiState.files[i]);
+      }
+      await aiPersist();
+      qc=await filmApi('/qc', {files: aiState.files});
+      aiLogSay(qc.bad && qc.bad.length ? ('⚠ Vẫn còn cảnh lỗi sau khi sửa: '+qc.bad.join(', ')+' — vẫn dựng phim, mày xem lại các cảnh này') : '✅ QC đạt: mọi cảnh đủ hình + tiếng, không trùng lặp');
+    } else {
+      aiLogSay('✅ QC đạt: mọi cảnh đủ hình + tiếng, không trùng lặp');
+    }
+    /* --- assemble (native speech kept, music auto, signature) --- */
+    aiRenderStages(5);
+    aiLogSay('🎞 Đang dựng phim…');
+    const job=await filmApi('/assemble', {title: aiState.title, signature:'by prompt Thaovy19T', music:{auto:true, volume:0.12}, bg_volume:1.0, edit:{transition:'fade', duration:0.6, title:true},
+      scenes: aiState.files.map(f=>({file:f, voice:{gender:'female', age:'adult', preset:'Ngoc Linh'}, dialogue:[]}))});
+    for(let k=0;k<240;k++){
+      await new Promise(r=>setTimeout(r,4000));
+      const j=await filmApi('/job/'+job.job_id);
+      if(j.status==='done'){
+        aiState.filmFile=j.result.file; aiState.stage='done'; await aiPersist();
+        localStorage.removeItem('aifilm_active');
+        aiRenderStages(6);
+        aiLogSay('🎉 PHIM XONG: '+j.result.file+' · '+j.result.seconds+' giây · '+fmtBytes(j.result.size)+' — đã nằm ở mục PHIM ĐÃ HOÀN THÀNH trên cùng Thư viện');
+        toast('🎉 Phim xong: '+j.result.file);
+        playMedia(j.result.url, 'video', '🎬 '+aiState.title, j.result.file);
+        loadFilmOutputs();
+        break;
+      }
+      if(j.status==='failed') throw new Error('Dựng phim lỗi: '+(j.error||'không rõ'));
+      if(k===239) throw new Error('Dựng phim quá lâu');
+    }
+  }catch(e){
+    aiRenderStages(aiState?3:0, true);
+    aiLogSay('⛔ Dừng: '+e.message+' — tiến độ đã lưu, mở lại Studio là chạy tiếp được');
+    toast('Làm phim dừng: '+e.message, true);
+    if(aiState) await aiPersist();
+  }finally{
+    aiBusy=false; btn.disabled=false; btn.textContent='🎬 TẠO PHIM';
+  }
+}
+async function aiLoadProject(key){
+  try{ const d=await filmApi('/projects'); return (d.projects||{})[key]||null; }catch(e){ return null; }
+}
+$('aiRunBtn').onclick=()=>aiRunFilm(null);
+/* auto-resume an interrupted production when Studio opens */
+setTimeout(async ()=>{
+  try{
+    const key=localStorage.getItem('aifilm_active'); if(!key) return;
+    const raw=localStorage.getItem('aifilm_'+key); if(!raw) return;
+    const st=JSON.parse(raw);
+    if(!st || st.stage==='done' || !st.script) return;
+    const bar=$('aiResumeBar'); if(!bar) return;
+    const done=(st.files||[]).filter(Boolean).length;
+    bar.classList.remove('hidden');
+    bar.innerHTML='↩ <b>'+st.title+'</b> đang làm dở ('+done+'/'+st.script.length+' cảnh) — tự chạy tiếp sau 5 giây… <button class="btn" id="aiResumeCancel">Để sau</button>';
+    toast('↩ Có phim đang làm dở: '+st.title+' — tự chạy tiếp sau 5 giây');
+    aiResumeTimer=setTimeout(()=>{ bar.classList.add('hidden'); showTab('aifilm'); aiRunFilm(st); }, 5000);
+    $('aiResumeCancel').onclick=()=>{ clearTimeout(aiResumeTimer); bar.classList.add('hidden'); };
+  }catch(e){}
+}, 1500);
+
 
 $('filmRunBtn').onclick=filmRun;
 

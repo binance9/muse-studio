@@ -603,7 +603,14 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 items = []
             self._send(200, {"items": items}); return
-        if self.path == "/comfy/stats":
+        if self.path == "/projects":
+            pf = os.path.join(ROOT, "projects.json")
+            try:
+                with open(pf, encoding="utf-8") as fh: data = json.load(fh)
+            except Exception:
+                data = {"projects": {}}
+            self._send(200, data)
+        elif self.path == "/comfy/stats":
             try:
                 with urllib.request.urlopen("http://127.0.0.1:8188/system_stats", timeout=4) as r:
                     cs = json.loads(r.read().decode("utf-8"))
@@ -698,6 +705,43 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/translate":
             texts = payload.get("texts") or []
             self._send(200, {"translations": translate_gtx([str(t) for t in texts])})
+        elif self.path == "/projects":
+            key = str(payload.get("key") or "").strip()
+            if not key:
+                self._send(400, {"error": "missing project key"}); return
+            pf = os.path.join(ROOT, "projects.json")
+            try:
+                with open(pf, encoding="utf-8") as fh: data = json.load(fh)
+            except Exception:
+                data = {"projects": {}}
+            data.setdefault("projects", {})[key] = payload.get("project") or {}
+            tmp = pf + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, ensure_ascii=False)
+            os.replace(tmp, pf)
+            self._send(200, {"ok": True, "key": key})
+        elif self.path == "/qc":
+            files = payload.get("files") or []
+            out, seen = [], {}
+            for name in files:
+                p = os.path.join(MEDIA_DIR, os.path.basename(str(name)))
+                if not os.path.isfile(p):
+                    out.append({"file": name, "ok": False, "error": "missing"}); continue
+                h = hashlib.sha256()
+                with open(p, "rb") as fh:
+                    for chunk in iter(lambda: fh.read(1 << 20), b""):
+                        h.update(chunk)
+                digest = h.hexdigest()
+                dur = probe_duration(p)
+                streams = probe_streams(p)
+                dup = digest in seen
+                seen[digest] = name
+                ok = ("video" in streams and "audio" in streams and dur > 3.0 and not dup)
+                out.append({"file": name, "ok": ok, "seconds": round(dur, 2),
+                            "streams": streams, "size": os.path.getsize(p),
+                            "sha256": digest[:16], "duplicate": dup})
+            self._send(200, {"items": out,
+                             "bad": [o["file"] for o in out if not o["ok"]]})
         elif self.path == "/assemble":
             jid = "job_" + hashlib.md5(f"{time.time()}".encode()).hexdigest()[:12]
             with JOBS_LOCK:
