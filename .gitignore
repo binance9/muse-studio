@@ -1,0 +1,13 @@
+# NEVER commit these — they contain your muse.ai account access
+.env
+data/
+*.env
+
+# Local runtime output
+outputs/
+jobs/
+voices/
+music/
+*.mp4
+*.wav
+__pycache__/
