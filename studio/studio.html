@@ -20,7 +20,7 @@ button{font:inherit;cursor:pointer}
 input,select,textarea{font:inherit;color:var(--txt)}
 ::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#c6ccd6;border-radius:6px}
 
-.layout{display:grid;grid-template-columns:264px minmax(0,1fr) 336px;gap:16px;max-width:1560px;margin:0 auto;padding:16px}
+.layout{display:grid;grid-template-columns:264px minmax(0,1fr) 384px;gap:16px;max-width:1560px;margin:0 auto;padding:16px}
 @media(max-width:1200px){.layout{grid-template-columns:230px minmax(0,1fr)}.col-right{grid-column:1/-1}}
 @media(max-width:820px){.layout{grid-template-columns:1fr}}
 
@@ -125,6 +125,19 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
 .sbprompt{ font-size:12px; color:#aeb4bf; margin-top:8px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .sbline{ font-size:12px; color:#d6dae1; margin-top:4px; }
 .sbfoot{ margin-top:9px; }
+
+.rtabs{display:flex;gap:6px;margin-bottom:11px}
+.rtab{flex:1;padding:8px 6px;border:1px solid var(--line);background:var(--panel2);border-radius:9px;font-weight:600;font-size:13.5px}
+.rtab.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#chatMsgs{height:440px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px}
+.chatmsg{max-width:90%;padding:9px 12px;border-radius:14px;white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.52}
+.chatmsg.me{align-self:flex-end;background:var(--acc);color:#fff;border-bottom-right-radius:4px}
+.chatmsg.ai{align-self:flex-start;background:var(--panel2);border:1px solid var(--line);border-bottom-left-radius:4px}
+.chatmsg.streaming::after{content:'\258D';animation:chatblink .8s infinite}
+@keyframes chatblink{50%{opacity:0}}
+.chatbar{align-self:stretch;background:#fff7e6;border:1px solid #e8b93c;border-radius:10px;padding:9px 11px;font-size:13px}
+.chatcomposer{display:flex;gap:6px;margin-top:10px;align-items:flex-end}
+.chatcomposer textarea{flex:1;resize:none;border:1px solid var(--line2);border-radius:10px;padding:9px 11px;max-height:110px}
 </style>
 </head>
 <body>
@@ -335,8 +348,26 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
   <!-- RIGHT: QUEUE -->
   <div class="col-right">
     <div class="card pad" style="position:sticky;top:18px">
-      <div class="row"><h2>⚡ Hàng đợi render</h2><span class="grow"></span><span class="chip run" id="qActive">0 đang chạy</span></div>
-      <div id="queue" style="margin-top:13px"><div class="muted small">Chưa có tác vụ nào. Tạo một video để bắt đầu.</div></div>
+      <div class="rtabs"><button class="rtab on" id="rtabChat">💬 Chat AI</button><button class="rtab" id="rtabProgress">⚡ Tiến độ</button></div>
+      <div id="paneChat">
+        <div class="row" style="gap:6px">
+          <input id="chatProject" placeholder="Tên dự án (ngữ cảnh + nhân vật riêng)" style="flex:1;min-width:0">
+          <button class="btn" id="chatGuideBtn" title="Sổ tay biên kịch chuyên nghiệp">📚</button>
+          <button class="btn" id="chatRulesBtn" title="Quy tắc sáng tác của dự án">📏</button>
+        </div>
+        <div id="chatMsgs" style="margin-top:10px"></div>
+        <div class="chatcomposer">
+          <button class="btn" id="chatAttachBtn" title="Đính kèm ảnh / video / tài liệu (.txt, .md)">📎</button>
+          <textarea id="chatInput" rows="2" placeholder="Nhắn cho trợ lý sản xuất… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
+          <button class="btn primary" id="chatSendBtn">Gửi</button>
+        </div>
+        <input type="file" id="chatFile" class="hidden" accept="image/*,video/*,.txt,.md">
+        <div class="small muted" style="margin-top:6px">Lịch sử + nháp + quy tắc lưu theo từng dự án — F5 hay mở lại vẫn còn nguyên.</div>
+      </div>
+      <div id="paneProgress" class="hidden">
+        <div class="row"><h2>⚡ Hàng đợi render</h2><span class="grow"></span><span class="chip run" id="qActive">0 đang chạy</span></div>
+        <div id="queue" style="margin-top:13px"><div class="muted small">Chưa có tác vụ nào. Tạo một video để bắt đầu.</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1471,7 +1502,7 @@ async function aiRunFilm(resume){
     }
     if(!aiState.sheetFile){
       aiLogSay('🎭 Đang tạo ảnh định trang khóa nhân vật…');
-      aiState.sheetFile=await aiGenWithRetry(()=>({prompt: aiSheetPrompt(aiState.cast), account_id:$('accountSel').value||null, model:'muse-image', n:1, size:$('sizeSel').value, generation_mode:'independent', prompt_language:'auto', response_format:'url'}), 'image', 'Ảnh định trang');
+      aiState.sheetFile=await aiGenWithRetry(()=>({prompt: aiSheetPrompt(aiState.cast), account_id:$('accountSel').value||null, model:'muse-image', n:1, size:$('sizeSel').value, generation_mode:'independent', prompt_language:'auto', response_format:'url', ...(window.AI_SHEET_REFS&&window.AI_SHEET_REFS.length?{reference_images:window.AI_SHEET_REFS, reference_roles:['character']}:{})}), 'image', 'Ảnh định trang');
       aiLogSay('🎭 Đã khóa nhân vật: '+aiState.sheetFile);
     }
     aiState.stage='scenes'; await aiPersist();
@@ -1482,7 +1513,7 @@ async function aiRunFilm(resume){
       if(aiState.files[i]) continue;
       aiState.current=i; aiRenderScenes();
       const sc=aiState.script[i];
-      const prompt=AI_STYLE_PREFIX+' '+sc.shot+'. '+sc.action+aiDirectiveFor(sc, castById, aiState.accent);
+      const prompt=(AI_STYLE_PREFIX+(window.AI_EXTRA_STYLE?(' '+window.AI_EXTRA_STYLE):''))+' '+sc.shot+'. '+sc.action+aiDirectiveFor(sc, castById, aiState.accent);
       aiLogSay('🎬 Cảnh '+(i+1)+'/'+aiState.script.length+' ('+sc.shot+')…');
       aiState.files[i]=await aiGenWithRetry(()=>({prompt, duration:Number($('durSel').value), account_id:$('accountSel').value||null, size:$('sizeSel').value, generation_mode:'independent', prompt_language:'auto', reference_images:[sheetURL], reference_roles:['character']}), 'video', 'Cảnh '+(i+1));
       aiLogSay('✅ Cảnh '+(i+1)+': '+aiState.files[i]);
@@ -1497,7 +1528,7 @@ async function aiRunFilm(resume){
       for(const badFile of qc.bad){
         const i=aiState.files.indexOf(badFile); if(i<0) continue;
         const sc=aiState.script[i];
-        const prompt=AI_STYLE_PREFIX+' '+sc.shot+'. '+sc.action+aiDirectiveFor(sc, castById, aiState.accent);
+        const prompt=(AI_STYLE_PREFIX+(window.AI_EXTRA_STYLE?(' '+window.AI_EXTRA_STYLE):''))+' '+sc.shot+'. '+sc.action+aiDirectiveFor(sc, castById, aiState.accent);
         aiState.files[i]=await aiGenWithRetry(()=>({prompt, duration:Number($('durSel').value), account_id:$('accountSel').value||null, size:$('sizeSel').value, generation_mode:'independent', prompt_language:'auto', reference_images:[sheetURL], reference_roles:['character']}), 'video', 'Tạo lại cảnh '+(i+1));
         aiLogSay('♻ Đã tạo lại cảnh '+(i+1)+': '+aiState.files[i]);
       }
@@ -1560,6 +1591,330 @@ setTimeout(async ()=>{
 
 
 $('filmRunBtn').onclick=filmRun;
+
+
+/* ================= Studio Chat — screenwriting guide + intent brain =================
+   HONEST ARCHITECTURE (verified live 2026-10-24): muse2api has NO text LLM —
+   POST /v1/chat/completions returns HTTP 400; /v1/models lists media models
+   only; there is no tool-calling channel. So this chat is Muse Studio's
+   production brain: it understands production intents (write a script, run
+   the film pipeline, report REAL progress, fix a scene, apply project rules,
+   analyze attachments with ffprobe + Whisper) and answers from the system's
+   actual state and the professional screenwriting guide below. It never
+   pretends to be a free-form LLM. */
+/*CHAT_BRAIN_START*/
+const SCREENWRITING_GUIDE=[
+'📚 SỔ TAY BIÊN KỊCH MUSE STUDIO (bộ quy tắc sáng tác áp dụng cho mọi kịch bản chat tạo ra)',
+'',
+'1) CẤU TRÚC BA HỒI: Hồi 1 (25%) — giới thiệu thế giới, nhân vật chính và mong muốn của họ, kết thúc bằng biến cố buộc họ phải hành động. Hồi 2 (50%) — xung đột leo thang, nhân vật thử–sai–trả giá, điểm giữa đảo chiều, điểm thấp nhất trước cao trào. Hồi 3 (25%) — cao trào đối đầu trực tiếp với mâu thuẫn cốt lõi, nhân vật thay đổi (hoặc trả giá vì không thay đổi), kết mở ấm áp đọng lại dư âm.',
+'2) NHÂN VẬT: mỗi nhân vật có (a) mong muốn rõ ràng, (b) điểm yếu/nỗi sợ, (c) thói quen hoặc vật gắn bó nhận diện (trang phục cố định, đạo cụ riêng). Nhân vật chính phải có cung thay đổi: đầu phim tin một điều, cuối phim hiểu điều ngược lại bằng trải nghiệm, không bằng lời giảng.',
+'3) XUNG ĐỘT: ưu tiên xung đột giá trị (nghề gia truyền ↔ đam mê cá nhân, an toàn ↔ tự do) hơn xung đột cãi vã. Mọi cảnh phải hoặc đẩy xung đột lên, hoặc hé lộ nhân vật sâu hơn — cảnh không làm hai việc đó thì cắt.',
+'4) CAO TRÀO: đặt ở ~80% thời lượng, là cảnh hai giá trị va chạm trực diện nhất, thoại ngắn, để hình ảnh và biểu cảm gánh cảm xúc. Sau cao trào chỉ còn 1–2 cảnh hạ nhiệt và kết.',
+'5) THOẠI TIẾNG VIỆT: câu ngắn (tối đa ~12 từ/câu để khớp miệng khi nhân vật nói thật), nói như người thật — có ngập ngừng, có câu cụt, tránh văn viết. Mỗi nhân vật một giọng: người già chậm và nhiều ẩn dụ, trẻ con hồn nhiên nói thẳng, người trẻ ít chữ nhưng nặng tình. Một cảnh tối đa 1–2 câu thoại; phần còn lại để hành động kể chuyện.',
+'6) CẢM XÚC: đi theo đường cong — mở nhẹ, ấm dần, một điểm chùng (tin xấu/mưa/thất bại), rồi nâng lên cao trào và kết ấm. Không hai cảnh nặng liên tiếp; sau cảnh nặng luôn có một nhịp thở (cảnh đời thường, hài nhẹ).',
+'7) NHỊP PHIM: mỗi cảnh 10 giây chỉ chứa MỘT nhịp chính (một hành động + tối đa một câu thoại). Cảnh mở và cảnh kết dùng toàn cảnh; cảnh cao trào dùng cận cảnh. Tránh ba cảnh cùng một loại góc máy liên tiếp.',
+'8) STORYBOARD & GÓC MÁY: luân phiên 8 góc — toàn cảnh (bối cảnh/quan hệ), trung cảnh (hành động), cận cảnh (cảm xúc), qua vai (đối thoại), hành động (việc đang diễn ra), hai người (quan hệ), nghiêng mặt (suy tư), máy di chuyển nhẹ (chuyển biến). Góc máy phục vụ cảm xúc của cảnh, không trang trí.',
+'9) TÍNH LIÊN TỤC: bối cảnh, thời gian trong ngày và đạo cụ phải khớp giữa các cảnh kề nhau (mưa thì ướt đến hết cơn mưa; vết bẩn, đồ vật cầm tay không tự biến mất). Khi chuyển thời gian, dùng một cảnh đệm (bình minh/hoàng hôn) để khán giả hiểu.',
+'10) GIỮ NHÂN VẬT ĐỒNG NHẤT: mọi cảnh đều tham chiếu cùng một ảnh định trang đã khóa của dự án (mặt, tóc, trang phục, đạo cụ nhận diện không đổi). Giọng nói cố định theo nhân vật xuyên suốt các tập; tên dự án không đổi thì dàn nhân vật và giọng được dùng lại nguyên vẹn cho tập sau.'
+].join('\n');
+const CHAT_SHOT_VI={'wide establishing shot':'Toàn cảnh rộng','medium shot':'Trung cảnh','close-up shot':'Cận cảnh','over-the-shoulder shot':'Qua vai','action shot':'Cảnh hành động','two-shot':'Hai người','side profile shot':'Nghiêng mặt','gentle tracking shot':'Máy di chuyển nhẹ'};
+function chatNorm(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').trim(); }
+function chatParseMinutes(text){
+  const m=chatNorm(text).match(/(\d{1,2})\s*phut/);
+  if(m){ const n=Number(m[1]); if(n>=1 && n<=30) return n; }
+  return 4;
+}
+function chatExtractIdea(text){
+  let idea=(text||'').trim();
+  idea=idea.replace(/^(tạo phim|viết kịch bản|làm phim|tạo kịch bản|kịch bản|hãy viết|viết|tạo)\s*(về\s*)?/i,'');
+  idea=idea.replace(/,?\s*(thời lượng\s*)?\d{1,2}\s*phút.*$/i,'').trim();
+  return idea.length>=8? idea : (text||'').trim();
+}
+function chatRoute(text, ctx){
+  const t=chatNorm(text);
+  ctx=ctx||{};
+  const fixM=t.match(/sua canh\s*(\d+)/);
+  if(fixM){
+    const q=(text.match(/["“”]([^"“”]{2,120})["“”]/)||[])[1]||null;
+    return {type:'fix_scene', n:Number(fixM[1]), newLine:q, note:text};
+  }
+  if(/^(ok|oke|duyet|dong y|chay di|lam di|gui di|tien hanh|bat dau)\b/.test(t) && ctx.hasDraft) return {type:'approve'};
+  if(ctx.hasDraft && /(gui|chay|lam)\s*(phim|tao phim)/.test(t)) return {type:'approve'};
+  if(/(dung lai|ghep lai|ghep phim|rap lai)/.test(t)) return {type:'reassemble'};
+  if(/(tien do|trang thai|den dau|bao gio xong|dang lam gi)/.test(t)) return {type:'progress'};
+  if(/(xem phim|xem ket qua|ket qua|phim xong|mo phim)/.test(t)) return {type:'result'};
+  if(/(quy tac|luat sang tac|nguyen tac)/.test(t) && /(dat|them|luu|doi|sua)/.test(t)) return {type:'set_rules', rules:text.replace(/^.*?[:：]/,'').trim()||text};
+  if(/(quy tac|so tay|huong dan bien kich|bien kich)/.test(t)) return {type:'guide'};
+  if(/(nhan vat|dan nhan vat|ai dong)/.test(t)) return {type:'cast'};
+  const anM=t.match(/phan tich\s+([a-z0-9_.\-]+\.(mp4|mov|webm|mp3|wav|m4a))/);
+  if(anM) return {type:'analyze_file', file:anM[1]};
+  if(/(phan tich video|video nay noi gi)/.test(t)) return {type:'analyze_hint'};
+  if(/(tao phim|viet kich ban|lam phim|kich ban|viet|tao kich ban)/.test(t)) return {type:'make_script', idea:chatExtractIdea(text), minutes:chatParseMinutes(text)};
+  if(/(xin chao|chao|hello|hi|hey|e may|may oi)/.test(t) && t.length<40) return {type:'greet'};
+  if(/(giup|lam duoc gi|chuc nang|help)/.test(t)) return {type:'help'};
+  return {type:'unknown'};
+}
+function chatBuildDraft(idea, minutes){
+  const parsed=aiParseIdea(idea);
+  const cast=aiBuildCast(parsed);
+  const nScenes=Math.max(6, Math.round(minutes*60/9.55));
+  const script=aiBuildScript(parsed, cast, nScenes);
+  return {idea, minutes, parsed, cast, script, nScenes};
+}
+function chatDraftHeader(d){
+  return '🎬 BẢN NHÁP KỊCH BẢN — '+d.nScenes+' cảnh (~'+d.minutes+' phút)\n'+
+    'Thể loại: '+d.parsed.genre+' · Bối cảnh: '+d.parsed.setting.vi+' · Nghề/chủ đề: '+d.parsed.craft.vi+'\n'+
+    'Nhân vật: '+d.cast.map(c=>c.name).join(', ')+'\n'+
+    'Áp dụng sổ tay biên kịch: cấu trúc ba hồi, thoại ≤12 từ/câu, luân phiên 8 góc máy, cảm xúc có nhịp thở, cao trào ở ~80%.';
+}
+function chatDraftSceneLine(d, i){
+  const sc=d.script[i];
+  const who=sc.lines && sc.lines.length? sc.lines.map(l=>l.name+': “'+l.text+'”').join(' · ') : '(cảnh không thoại — kể bằng hình ảnh)';
+  return 'Cảnh '+(i+1)+' · '+(CHAT_SHOT_VI[sc.shot]||sc.shot)+' · '+who;
+}
+function chatProgressText(snap){
+  if(!snap || (!snap.project && !snap.active)) return 'Hiện không có phim nào đang chạy trong Tạo phim AI và hàng đợi đang trống. Nói "tạo phim về…" là tao bắt đầu ngay.';
+  let out='';
+  if(snap.project){ out+='🎬 Dự án: '+snap.project+'\nTiến độ cảnh: '+(snap.done||0)+'/'+(snap.total||'?')+'\nGiai đoạn: '+(snap.stage==='done'?'đã xong':(snap.stage||'đang làm')); if(snap.filmFile) out+='\nPhim: '+snap.filmFile; }
+  if(snap.active!=null) out+=(out?'\n':'')+'⚡ Hàng đợi render: '+snap.active+' tác vụ đang chạy.';
+  return out;
+}
+const CHAT_INTRO='Chào mày, tao là trợ lý sản xuất của Muse Studio — chạy ngay trên hệ thống này, dùng Muse làm nguồn tạo hình/giọng. Tao làm được thật những việc sau:\n• "Tạo phim về <ý tưởng>, <số> phút" → tao viết bản nháp kịch bản theo sổ tay biên kịch chuyên nghiệp, mày duyệt rồi tao gửi thẳng vào pipeline TẠO PHIM TỰ ĐỘNG.\n• "Tiến độ" → báo đúng số cảnh đã xong từ hệ thống.\n• "Sửa cảnh N: <yêu cầu>" → tạo lại đúng cảnh đó.\n• Đính kèm: ảnh (làm tham chiếu nhân vật), video (tao trích lời thoại bằng Whisper + thông số thật), tài liệu .txt/.md (lưu làm kịch bản mẫu/quy tắc cho dự án).\nNói thẳng giới hạn: Muse không có mô hình chat văn bản (endpoint chat trả lỗi 400 — đã kiểm chứng), nên tao không trò chuyện tự do kiểu ChatGPT được; tao là trợ lý sản xuất hiểu lệnh và làm việc thật trên pipeline.';
+const CHAT_UNKNOWN='Câu này nằm ngoài phần việc sản xuất phim của tao nên tao không bịa câu trả lời. Tao hiểu được các lệnh như: "tạo phim về …", "tiến độ", "xem kết quả", "sửa cảnh 3: …", "quy tắc", "sổ tay biên kịch" — hoặc mày cứ đính kèm ảnh/video/tài liệu vào đây.';
+/*CHAT_BRAIN_END*/
+
+
+/* ---------- Studio Chat UI (right column) ---------- */
+let chatKey='default', chatMsgs=[], chatDraft=null, chatRules='', chatAttachImages=[], chatSampleName='';
+function chatStoreKey(){ return 'musechat_'+chatKey; }
+function chatSave(){
+  try{ localStorage.setItem(chatStoreKey(), JSON.stringify({msgs:chatMsgs.slice(-120), rules:chatRules, draft:chatDraft, sample:chatSampleName})); }catch(e){}
+}
+function chatLoad(){
+  chatMsgs=[]; chatDraft=null; chatRules=''; chatSampleName='';
+  try{ const d=JSON.parse(localStorage.getItem(chatStoreKey())||'null'); if(d){ chatMsgs=d.msgs||[]; chatRules=d.rules||''; chatDraft=d.draft||null; chatSampleName=d.sample||''; } }catch(e){}
+  const w=$('chatMsgs'); if(w){ w.innerHTML=''; chatMsgs.forEach(m=>chatRenderMsg(m, false)); chatScroll(); if(chatDraft && !chatDraft.sent) chatRenderDraftBar(); }
+}
+function chatScroll(){ const w=$('chatMsgs'); if(w) w.scrollTop=w.scrollHeight; }
+function chatRenderMsg(m, save=true){
+  const w=$('chatMsgs'); if(!w) return null;
+  const div=document.createElement('div');
+  div.className='chatmsg '+(m.who==='me'?'me':'ai');
+  div.textContent=m.text;
+  w.appendChild(div); chatScroll();
+  if(save){ chatMsgs.push(m); chatSave(); }
+  return div;
+}
+async function chatStream(text){
+  const div=chatRenderMsg({who:'ai', text:''}, false);
+  if(!div){ chatMsgs.push({who:'ai', text}); chatSave(); return; }
+  div.classList.add('streaming');
+  let i=0; const step=3;
+  while(i<text.length){ i=Math.min(text.length, i+step); div.textContent=text.slice(0,i); chatScroll(); await new Promise(r=>setTimeout(r,9)); }
+  div.classList.remove('streaming');
+  chatMsgs.push({who:'ai', text}); chatSave();
+}
+function chatSay(text){ return chatStream(text); }
+function chatRenderDraftBar(){
+  const old=$('chatDraftBar'); if(old) old.remove();
+  if(!chatDraft || chatDraft.sent) return;
+  const bar=document.createElement('div'); bar.id='chatDraftBar'; bar.className='chatbar';
+  bar.innerHTML='<b>📄 Bản nháp đang chờ duyệt</b> — '+chatDraft.nScenes+' cảnh<div class="row" style="margin-top:7px;gap:6px;flex-wrap:wrap"><button class="btn primary" id="chatApproveBtn">✔ Gửi vào TẠO PHIM TỰ ĐỘNG</button><button class="btn" id="chatDraftTabBtn">Mở tab Tạo phim AI</button><button class="btn" id="chatDraftDropBtn">Bỏ nháp</button></div>';
+  $('chatMsgs').appendChild(bar); chatScroll();
+  $('chatApproveBtn').onclick=chatApproveDraft;
+  $('chatDraftTabBtn').onclick=()=>showTab('aifilm');
+  $('chatDraftDropBtn').onclick=()=>{ chatDraft=null; chatSave(); bar.remove(); chatSay('Đã bỏ bản nháp. Nói ý tưởng mới bất cứ lúc nào.'); };
+}
+function chatSnapshot(){
+  const snap={active:0, project:null, total:0, done:0, stage:null, filmFile:null};
+  try{ tasks.forEach(t=>{ if(['queued','processing'].includes(t.status)) snap.active++; }); }catch(e){}
+  let st=(window.aiState && aiState && aiState.script)? aiState : null;
+  if(!st){ try{ const k=localStorage.getItem('aifilm_active'); if(k) st=JSON.parse(localStorage.getItem('aifilm_'+k)||'null'); }catch(e){} }
+  if(st && st.script){ snap.project=st.title; snap.total=st.script.length; snap.done=(st.files||[]).filter(Boolean).length; snap.stage=st.stage; snap.filmFile=st.filmFile||null; }
+  return snap;
+}
+async function chatApproveDraft(){
+  if(!chatDraft || chatDraft.sent) return;
+  const d=chatDraft; d.sent=true; chatSave();
+  const bar=$('chatDraftBar'); if(bar) bar.remove();
+  window.AI_EXTRA_STYLE=chatRules? ('Creative rules for this project (follow strictly): '+chatRules) : '';
+  window.AI_SHEET_REFS=chatAttachImages.slice();
+  const title='Phim — '+d.idea.slice(0,44);
+  const st={key:chatKey, title, idea:d.idea, minutes:d.minutes, accent:'Northern', parsed:d.parsed, cast:d.cast, script:d.script,
+    sheetFile:null, files:new Array(d.script.length).fill(null), stage:'script', filmFile:null, createdAt:Date.now()};
+  const inp=$('aiProject'); if(inp && chatKey!=='default') inp.value=chatKey;
+  const ideaEl=$('aiIdea'); if(ideaEl) ideaEl.value=d.idea;
+  await chatSay('🚀 Đã gửi bản nháp vào pipeline TẠO PHIM TỰ ĐỘNG (dự án "'+chatKey+'", '+d.script.length+' cảnh). Tao chuyển qua tab Tạo phim AI để mày thấy tiến độ trực tiếp — hỏi "tiến độ" ở đây bất cứ lúc nào.');
+  showTab('aifilm');
+  aiRunFilm(st);
+}
+async function chatFixSceneReal(n, note, newLine){
+  const st=window.aiState;
+  if(!st || !st.script || !st.files || !st.files[n-1]){ await chatSay('Cảnh '+n+' chưa có trong phiên làm phim hiện tại (mở tab Tạo phim AI hoặc tạo phim mới trước đã). Nếu mày đang nói bản nháp, tao sửa trên nháp được ngay.'); return; }
+  const sc=st.script[n-1];
+  if(newLine && sc.lines && sc.lines[0]) sc.lines[0].text=newLine;
+  await chatSay('🎬 Đang tạo lại cảnh '+n+' theo yêu cầu của mày… (xong tao báo, rồi nói "dựng lại" để ghép bản phim mới)');
+  try{
+    const castById={}; st.cast.forEach(c=>castById[c.id]=c);
+    const sheetURL=await aiMediaDataURL(st.sheetFile);
+    const extra=(note && !newLine)? (' Director note: '+String(note).slice(0,180)) : '';
+    const prompt=(AI_STYLE_PREFIX+(window.AI_EXTRA_STYLE?(' '+window.AI_EXTRA_STYLE):''))+' '+sc.shot+'. '+sc.action+extra+aiDirectiveFor(sc, castById, st.accent);
+    const f=await aiGenWithRetry(()=>({prompt, duration:Number($('durSel').value), account_id:$('accountSel').value||null, size:$('sizeSel').value, generation_mode:'independent', prompt_language:'auto', reference_images:[sheetURL], reference_roles:['character']}), 'video', 'Sửa cảnh '+n);
+    st.files[n-1]=f; await aiPersist();
+    await chatSay('✅ Đã tạo lại cảnh '+n+': '+f+'. Nói "dựng lại" để tao ghép thành bản phim mới, hoặc xem phim hiện tại bằng lệnh "xem kết quả".');
+  }catch(e){ await chatSay('⛔ Sửa cảnh lỗi: '+e.message); }
+}
+async function chatReassemble(){
+  const st=window.aiState;
+  if(!st || !st.files || st.files.some(f=>!f)){ await chatSay('Chưa đủ cảnh để dựng lại (cần một dự án đã tạo đủ cảnh trong phiên này).'); return; }
+  await chatSay('🎞 Đang dựng lại phim từ '+st.files.length+' cảnh hiện có…');
+  try{
+    const job=await filmApi('/assemble', {title: st.title, signature:'by prompt Thaovy19T', music:{auto:true, volume:0.12}, bg_volume:1.0, edit:{transition:'fade', duration:0.6, title:true},
+      scenes: st.files.map(f=>({file:f, voice:{gender:'female', age:'adult', preset:'Ngoc Linh'}, dialogue:[]}))});
+    for(let k=0;k<240;k++){
+      await new Promise(r=>setTimeout(r,4000));
+      const j=await filmApi('/job/'+job.job_id);
+      if(j.status==='done'){ st.filmFile=j.result.file; st.stage='done'; await aiPersist(); loadFilmOutputs(); await chatSay('🎉 Dựng xong bản mới: '+j.result.file+' · '+j.result.seconds+' giây — đã lên mục PHIM ĐÃ HOÀN THÀNH. Nói "xem kết quả" để mở xem.'); return; }
+      if(j.status==='failed') throw new Error(j.error||'dựng lỗi');
+    }
+    throw new Error('dựng quá lâu');
+  }catch(e){ await chatSay('⛔ Dựng lại lỗi: '+e.message); }
+}
+async function chatAnalyzeSummary(name, info){
+  let out='🎧 Phân tích "'+name+'":\n• Thời lượng: '+(info.seconds||0)+' giây · Luồng: '+((info.streams||[]).join(', ')||'không rõ')+' · Dung lượng: '+fmtBytes(info.size||0);
+  if(info.transcript){
+    const tr=info.transcript;
+    out+='\n• Ngôn ngữ: '+tr.language+' (tin cậy '+(Math.round((tr.probability||0)*100))+'%) · '+(tr.segments||[]).length+' đoạn thoại';
+    out+='\n• Lời thoại trích được: “'+(tr.text||'').slice(0,420)+(tr.text&&tr.text.length>420?'…':'')+'”';
+  }
+  if(info.note) out+='\n• '+info.note;
+  return out;
+}
+async function chatHandleFile(file){
+  if(!file) return;
+  const name=file.name;
+  if(/^image\//.test(file.type)){
+    const url=await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(file); });
+    if(chatAttachImages.length>=3) chatAttachImages.shift();
+    chatAttachImages.push(url);
+    chatRenderMsg({who:'me', text:'🖼 [Ảnh đính kèm] '+name});
+    await chatSay('Đã nhận ảnh "'+name+'" — tao giữ làm ảnh tham chiếu nhân vật cho lần tạo phim tiếp theo trong dự án này.\nLưu ý thật: Muse có thể từ chối ảnh người thật ở bước tạo ảnh định trang; nếu bị từ chối, hệ thống tự chuyển sang dựng nhân vật bằng mô tả chữ, tao sẽ báo rõ khi chạy.');
+    return;
+  }
+  if(/^video\//.test(file.type) || /\.(mp4|mov|webm|mkv)$/i.test(name)){
+    if(file.size>80*1024*1024){ await chatSay('Video "'+name+'" nặng '+fmtBytes(file.size)+' — giới hạn phân tích trực tiếp trong chat là 80 MB. Mày có thể tạo video đó trong Studio rồi bảo tao "phân tích <tên file>" từ thư viện.'); return; }
+    chatRenderMsg({who:'me', text:'🎞 [Video đính kèm] '+name});
+    await chatSay('Đang phân tích "'+name+'" (đo thông số + trích lời thoại bằng Whisper trên máy này) — chờ chút…');
+    try{
+      const r=await fetch(FILM_API+'/analyze-upload?name='+encodeURIComponent(name), {method:'POST', body:file});
+      const info=await r.json();
+      if(!r.ok) throw new Error(info.error||'lỗi phân tích');
+      await chatSay(await chatAnalyzeSummary(name, info));
+    }catch(e){ await chatSay('⛔ Phân tích lỗi: '+e.message); }
+    return;
+  }
+  if(/\.(txt|md)$/i.test(name) || /^text\//.test(file.type)){
+    const text=await file.text();
+    chatRenderMsg({who:'me', text:'📄 [Tài liệu đính kèm] '+name});
+    const looksScript=/cảnh\s*\d|thoại|hồi\s*[123]|INT\.|EXT\./i.test(text);
+    try{ await filmApi('/projects', {key:chatKey, project: looksScript? {sampleScript:{name, chars:text.length, text:text.slice(0,20000)}} : {refDoc:{name, chars:text.length, text:text.slice(0,20000)}}}); }catch(e){}
+    if(looksScript){ chatSampleName=name; chatSave(); await chatSay('Đã lưu "'+name+'" ('+text.length+' ký tự) làm KỊCH BẢN MẪU tham chiếu cho dự án "'+chatKey+'". Khi viết nháp mới, tao đối chiếu phong cách và cấu trúc theo tài liệu này.'); }
+    else await chatSay('Đã lưu "'+name+'" ('+text.length+' ký tự) làm tài liệu tham chiếu của dự án "'+chatKey+'".');
+    return;
+  }
+  await chatSay('Định dạng "'+name+'" tao chưa trích xuất được ngay trong Studio (hiện hỗ trợ: ảnh, video, .txt/.md). Nếu là kịch bản PDF/DOCX, xuất ra .txt rồi gửi lại cho tao — tao không bịa nội dung tài liệu đọc không được.');
+}
+async function chatSend(){
+  const inp=$('chatInput'); const text=(inp.value||'').trim(); if(!text) return;
+  inp.value='';
+  chatRenderMsg({who:'me', text});
+  const r=chatRoute(text, {hasDraft: !!(chatDraft && !chatDraft.sent), hasFilm: !!(window.aiState && aiState && aiState.filmFile)});
+  try{
+    if(r.type==='greet') await chatSay('Chào mày 👋 Tao là trợ lý sản xuất của Studio. Nói "tạo phim về <ý tưởng>" là tao viết kịch bản ngay, hoặc "giúp" để xem tao làm được gì.');
+    else if(r.type==='help') await chatSay(CHAT_INTRO);
+    else if(r.type==='guide') await chatSay(SCREENWRITING_GUIDE+'\n\nQuy tắc riêng của dự án "'+chatKey+'": '+(chatRules? chatRules : '(chưa đặt — nói "đặt quy tắc: …" để thêm)'));
+    else if(r.type==='cast'){
+      const d=chatDraft || (window.aiState? {cast:aiState.cast}: null);
+      if(d && d.cast) await chatSay('🎭 Dàn nhân vật hiện tại:\n'+d.cast.map(c=>'• '+c.name+' — '+c.desc).join('\n'));
+      else await chatSay('Chưa có dàn nhân vật nào. Tạo một bản nháp kịch bản trước ("tạo phim về…") là tao dựng dàn nhân vật và khóa bằng ảnh định trang.');
+    }
+    else if(r.type==='set_rules'){
+      chatRules=r.rules; chatSave();
+      try{ await filmApi('/projects', {key:chatKey, project:{chatRules}}); }catch(e){}
+      await chatSay('📏 Đã lưu quy tắc sáng tác cho dự án "'+chatKey+'":\n'+chatRules+'\nQuy tắc này được gắn vào mọi cảnh khi dựng phim từ chat.');
+    }
+    else if(r.type==='make_script'){
+      await chatSay('✍ Đang viết kịch bản từ ý tưởng của mày theo sổ tay biên kịch…');
+      const d=chatBuildDraft(r.idea, r.minutes||4);
+      chatDraft={...d, sent:false}; chatSave();
+      const bubble=chatRenderMsg({who:'ai', text:''}, false);
+      let full=chatDraftHeader(d);
+      if(bubble){ bubble.textContent=full; chatScroll(); }
+      for(let i=0;i<d.script.length;i++){
+        full+='\n'+chatDraftSceneLine(d, i);
+        if(bubble){ bubble.textContent=full; chatScroll(); }
+        await new Promise(res=>setTimeout(res, 60));
+      }
+      chatMsgs.push({who:'ai', text:full}); chatSave();
+      chatRenderDraftBar();
+      await chatSay('Bản nháp xong. Mày có thể: bấm "✔ Gửi vào TẠO PHIM TỰ ĐỘNG", hoặc nói "sửa cảnh N: <thoại mới trong ngoặc kép>" để chỉnh ngay trên nháp, hoặc mô tả ý tưởng khác để viết lại.');
+    }
+    else if(r.type==='approve'){
+      if(chatDraft && !chatDraft.sent) await chatApproveDraft();
+      else await chatSay('Chưa có bản nháp nào đang chờ duyệt. Nói "tạo phim về <ý tưởng>" trước đã.');
+    }
+    else if(r.type==='progress') await chatSay(chatProgressText(chatSnapshot()));
+    else if(r.type==='result'){
+      const d=await filmApi('/outputs');
+      const items=d.items||[];
+      if(items.length){ const it=items[0]; const b=await chatSay('🎬 Phim mới nhất trong Studio: '+it.file+' · '+it.seconds+' giây · '+fmtBytes(it.size)+'. Bấm nút dưới đây để xem ngay.'), div=document.createElement('div'); div.className='chatbar'; div.innerHTML='<button class="btn primary">▶ Xem: '+it.file+'</button>'; div.querySelector('button').onclick=()=>playMedia(it.url,'video','🎬 '+it.file, it.file); $('chatMsgs').appendChild(div); chatScroll(); }
+      else await chatSay('Thư viện chưa có phim hoàn thành nào.');
+    }
+    else if(r.type==='fix_scene'){
+      if(chatDraft && !chatDraft.sent){
+        const sc=chatDraft.script[r.n-1];
+        if(!sc){ await chatSay('Bản nháp chỉ có '+chatDraft.script.length+' cảnh — không có cảnh '+r.n+'.'); }
+        else{
+          if(r.newLine && sc.lines && sc.lines[0]){ sc.lines[0].text=r.newLine; chatSave(); await chatSay('✎ Đã sửa thoại cảnh '+r.n+' trên bản nháp → '+chatDraftSceneLine(chatDraft, r.n-1)); }
+          else { sc.action=sc.action+' '+text; chatSave(); await chatSay('✎ Đã ghi yêu cầu sửa vào cảnh '+r.n+' của bản nháp (sẽ áp dụng khi tạo cảnh). Nếu muốn đổi thoại, nói rõ thoại mới trong "ngoặc kép".'); }
+        }
+      } else await chatFixSceneReal(r.n, r.note, r.newLine);
+    }
+    else if(r.type==='reassemble') await chatReassemble();
+    else if(r.type==='analyze_file'){
+      await chatSay('Đang phân tích "'+r.file+'" từ thư viện (Whisper chạy trên máy, chờ chút)…');
+      try{ const info=await filmApi('/analyze', {file:r.file}); await chatSay(await chatAnalyzeSummary(r.file, info)); }
+      catch(e){ await chatSay('⛔ Không phân tích được: '+e.message+' (kiểm tra lại tên file trong thư viện).'); }
+    }
+    else if(r.type==='analyze_hint') await chatSay('Mày đính kèm video vào đây (nút 📎) hoặc nói "phân tích <tên-file.mp4>" với file có sẵn trong thư viện — tao trích lời thoại thật bằng Whisper và đo thông số, không đoán nội dung.');
+    else await chatSay(CHAT_UNKNOWN);
+  }catch(e){ await chatSay('⛔ Lỗi khi xử lý: '+e.message); }
+}
+/* ---------- right-column tabs + wiring ---------- */
+function chatTab(which){
+  $('paneChat').classList.toggle('hidden', which!=='chat');
+  $('paneProgress').classList.toggle('hidden', which!=='progress');
+  $('rtabChat').classList.toggle('on', which==='chat');
+  $('rtabProgress').classList.toggle('on', which==='progress');
+}
+$('rtabChat').onclick=()=>chatTab('chat');
+$('rtabProgress').onclick=()=>chatTab('progress');
+$('chatSendBtn').onclick=chatSend;
+$('chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); chatSend(); } });
+$('chatAttachBtn').onclick=()=>$('chatFile').click();
+$('chatFile').addEventListener('change', async e=>{ const f=e.target.files[0]; e.target.value=''; await chatHandleFile(f); });
+$('chatGuideBtn').onclick=()=>{ chatRenderMsg({who:'me', text:'📚 Sổ tay biên kịch'}); chatSay(SCREENWRITING_GUIDE); };
+$('chatRulesBtn').onclick=async()=>{ chatRenderMsg({who:'me', text:'📏 Quy tắc dự án'}); await chatSay('Quy tắc sáng tác của dự án "'+chatKey+'":\n'+(chatRules||'(chưa có)')+'\nĐặt mới bằng lệnh: đặt quy tắc: <nội dung>'); };
+$('chatProject').addEventListener('change', ()=>{
+  chatKey=aiSlug($('chatProject').value.trim())||'default';
+  chatAttachImages=[];
+  chatLoad();
+});
+setTimeout(()=>{
+  chatKey=aiSlug(($('chatProject').value||'').trim())||'default';
+  chatLoad();
+  if(!chatMsgs.length){ chatMsgs.push({who:'ai', text:CHAT_INTRO}); chatSave(); const w=$('chatMsgs'); if(w){ w.innerHTML=''; chatMsgs.forEach(m=>chatRenderMsg(m,false)); chatScroll(); } }
+}, 900);
 
 </script>
 </body>

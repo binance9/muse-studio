@@ -106,6 +106,35 @@ def clone_ready():
 JOBS = {}
 JOBS_LOCK = threading.Lock()
 INBOX_FILE = os.path.join(ROOT, "inbox.json")
+UPLOAD_DIR = os.path.join(ROOT, "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+WHISPER_SCRIPT = os.path.join(ROOT, "analyze_whisper.py")
+
+def analyze_media(path):
+    """ffprobe facts + Whisper transcript (when an audio stream exists)."""
+    dur = probe_duration(path)
+    streams = probe_streams(path)
+    info = {"file": os.path.basename(path), "seconds": round(dur, 1),
+            "streams": streams, "size": os.path.getsize(path),
+            "transcript": None, "note": ""}
+    if "audio" not in streams:
+        info["note"] = "Tệp không có luồng tiếng nên không trích được lời thoại."
+        return info
+    if not (os.path.isfile(CLONE_PY) and os.path.isfile(WHISPER_SCRIPT)):
+        info["note"] = "Máy chưa sẵn sàng bộ nhận dạng giọng nói (tts-pro)."
+        return info
+    wav = os.path.join(UPLOAD_DIR, "_analyze.wav")
+    rc, out = run([FFMPEG, "-y", "-v", "error", "-i", path,
+                   "-ar", "16000", "-ac", "1", wav], timeout=300)
+    if rc != 0:
+        info["note"] = "Không tách được âm thanh: " + out[-160:]
+        return info
+    rc, out = run([CLONE_PY, WHISPER_SCRIPT, wav], timeout=1200)
+    try:
+        info["transcript"] = json.loads(out.strip().splitlines()[-1])
+    except Exception:
+        info["note"] = "Nhận dạng giọng nói lỗi: " + out[-160:]
+    return info
 
 def run(cmd, timeout=1800, env_extra=None):
     env = None
@@ -669,6 +698,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(n) if n else b""
+        if self.path.startswith("/analyze-upload"):
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            name = os.path.basename((qs.get("name") or ["upload.bin"])[0])
+            dest = os.path.join(UPLOAD_DIR, name)
+            with open(dest, "wb") as fh: fh.write(raw)
+            info = analyze_media(dest)
+            info["saved_as"] = name
+            self._send(200, info)
+            return
         if self.path.startswith("/music") or self.path.startswith("/voice-ref"):
             qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             name = os.path.basename((qs.get("name") or ["upload.bin"])[0])
@@ -714,7 +752,9 @@ class Handler(BaseHTTPRequestHandler):
                 with open(pf, encoding="utf-8") as fh: data = json.load(fh)
             except Exception:
                 data = {"projects": {}}
-            data.setdefault("projects", {})[key] = payload.get("project") or {}
+            merged = dict(data.setdefault("projects", {}).get(key) or {})
+            merged.update(payload.get("project") or {})
+            data["projects"][key] = merged
             tmp = pf + ".tmp"
             with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump(data, fh, ensure_ascii=False)
@@ -742,6 +782,16 @@ class Handler(BaseHTTPRequestHandler):
                             "sha256": digest[:16], "duplicate": dup})
             self._send(200, {"items": out,
                              "bad": [o["file"] for o in out if not o["ok"]]})
+        elif self.path == "/analyze":
+            name = os.path.basename(str(payload.get("file") or ""))
+            path = None
+            for d in (MEDIA_DIR, OUT_DIR, UPLOAD_DIR):
+                cand = os.path.join(d, name)
+                if os.path.isfile(cand):
+                    path = cand; break
+            if not path:
+                self._send(404, {"error": "file not found: " + name}); return
+            self._send(200, analyze_media(path))
         elif self.path == "/assemble":
             jid = "job_" + hashlib.md5(f"{time.time()}".encode()).hexdigest()[:12]
             with JOBS_LOCK:
