@@ -129,11 +129,17 @@ def analyze_media(path):
     if rc != 0:
         info["note"] = "Không tách được âm thanh: " + out[-160:]
         return info
-    rc, out = run([CLONE_PY, WHISPER_SCRIPT, wav], timeout=1200)
+    res = os.path.join(UPLOAD_DIR, "_analyze_result.json")
     try:
-        info["transcript"] = json.loads(out.strip().splitlines()[-1])
+        os.remove(res)
     except Exception:
-        info["note"] = "Nhận dạng giọng nói lỗi: " + out[-160:]
+        pass
+    rc, out = run([CLONE_PY, WHISPER_SCRIPT, wav, res], timeout=1200)
+    try:
+        with open(res, encoding="utf-8") as fh:
+            info["transcript"] = json.load(fh)
+    except Exception:
+        info["note"] = "Nhận dạng giọng nói lỗi (rc=%s): %s" % (rc, out[-300:])
     return info
 
 def run(cmd, timeout=1800, env_extra=None):
