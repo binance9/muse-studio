@@ -304,13 +304,13 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
     </div>
 
     <div class="card pad" id="librarySec">
-      <div class="row"><h2>▤ Thư viện</h2><span class="grow"></span><span class="small muted" id="libCount"></span><button id="libRefresh" class="btn">↻ Làm mới</button></div>
-      <div class="grid" id="libGrid" style="margin-top:13px"></div>
-      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:13px">
-        <div class="row"><h3 style="margin:0">🎬 Phim đã hoàn thành</h3><span class="grow"></span><button id="filmOutRefresh" class="btn">↻ Làm mới</button></div>
-        <div class="small muted" style="margin-top:4px">Tập nào dựng xong cũng nằm luôn ở đây trong Studio — bấm ▶ Xem là xem ngay trong app, xem ưng rồi bấm ⬇ Tải xuống để tự lưu về máy.</div>
+      <div style="background:linear-gradient(135deg,#fff7e6,#ffefc4);border:1.5px solid #e8b93c;border-radius:14px;padding:13px 14px;margin-bottom:15px">
+        <div class="row"><h3 style="margin:0">🎬 PHIM ĐÃ HOÀN THÀNH <span class="small muted" id="filmCountBadge"></span></h3><span class="grow"></span><button id="filmOutRefresh" class="btn">↻ Làm mới</button></div>
+        <div class="small muted" style="margin-top:3px">Phim nối xong nằm ngay trên cùng này — bấm vào hình là xem ngay trong app, ưng rồi bấm ⬇ Tải xuống để tự lưu về máy.</div>
         <div id="filmOutputs" style="margin-top:10px"></div>
       </div>
+      <div class="row"><h2>▤ Thư viện</h2><span class="grow"></span><span class="small muted" id="libCount"></span><button id="libRefresh" class="btn">↻ Làm mới</button></div>
+      <div class="grid" id="libGrid" style="margin-top:13px"></div>
     </div>
   </div>
 
@@ -603,14 +603,21 @@ async function loadFilmOutputs(){
     const items=d.items||[];
     if(!items.length){ w.innerHTML='<div class="small muted">Chưa có phim hoàn chỉnh nào. Phim dựng xong sẽ tự hiện ở đây.</div>'; return; }
     w.innerHTML='';
+    const bd=$('filmCountBadge'); if(bd) bd.textContent='· '+items.length+' phim';
+    const grid=document.createElement('div'); grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px';
     for(const it of items){
-      const row=document.createElement('div'); row.className='row'; row.style.cssText='padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px';
-      const nm=document.createElement('span'); nm.style.cssText='font-weight:600;flex:1;min-width:220px'; nm.textContent=it.file;
-      const meta=document.createElement('span'); meta.className='small muted'; meta.textContent=(it.seconds?('⏱ '+fmtDur(it.seconds)+' · '):'')+fmtBytes(it.size)+(it.mtime?' · '+new Date(it.mtime*1000).toLocaleString('vi-VN'):'');
-      const view=document.createElement('button'); view.className='btn primary'; view.textContent='▶ Xem'; view.onclick=()=>{ playMedia(it.url,'video','🎬 '+it.file,it.file); window.scrollTo({top:0,behavior:'smooth'}); };
+      const card=document.createElement('div'); card.style.cssText='background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden';
+      const open=()=>{ playMedia(it.url,'video','🎬 '+it.file,it.file); window.scrollTo({top:0,behavior:'smooth'}); };
+      const vid=document.createElement('video'); vid.src=it.url; vid.preload='metadata'; vid.muted=true; vid.playsInline=true; vid.title='Bấm để xem phim'; vid.style.cssText='width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#000;cursor:pointer'; vid.onclick=open;
+      const body=document.createElement('div'); body.style.cssText='padding:9px 11px';
+      const nm=document.createElement('div'); nm.style.cssText='font-weight:700;font-size:14px;line-height:1.35'; nm.textContent=it.file;
+      const meta=document.createElement('div'); meta.className='small muted'; meta.style.marginTop='3px'; meta.textContent=(it.seconds?('⏱ '+fmtDur(it.seconds)+' · '):'')+fmtBytes(it.size)+(it.mtime?' · '+new Date(it.mtime*1000).toLocaleString('vi-VN'):'');
+      const btns=document.createElement('div'); btns.className='row'; btns.style.marginTop='8px';
+      const view=document.createElement('button'); view.className='btn primary'; view.textContent='▶ Xem'; view.onclick=open;
       const dl=document.createElement('a'); dl.className='btn'; dl.textContent='⬇ Tải xuống'; dl.href=it.url; dl.download=it.file;
-      row.append(nm,meta,view,dl); w.appendChild(row);
+      btns.append(view,dl); body.append(nm,meta,btns); card.append(vid,body); grid.appendChild(card);
     }
+    w.appendChild(grid);
   }catch(e){ w.innerHTML='<div class="small muted">Chưa đọc được danh sách phim hoàn chỉnh — dịch vụ dựng phim (cổng 18621) chưa chạy?</div>'; }
 }
 $('filmOutRefresh').onclick=loadFilmOutputs;
@@ -1186,6 +1193,7 @@ $('sbSyncBtn').onclick=()=>sbSync(true);
 $('sbGenBtn').onclick=sbGenMissing;
 $('sbAsmBtn').onclick=sbAssemble;
 document.querySelector('.nav a[data-tab="storyboard"]').addEventListener('click', ()=>setTimeout(()=>{ sbSync(false); }, 60));
+document.querySelector('.nav a[data-tab="library"]').addEventListener('click', ()=>setTimeout(()=>{ loadFilmOutputs(); }, 60));
 
 
 /* ---------- v5.0: native speech directives + Storyboard auto-film + ComfyUI chip ---------- */
