@@ -273,6 +273,7 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
           <option value="assemble">Chỉ dựng từ clip có sẵn</option>
         </select>
         <label class="row" style="cursor:pointer"><input type="checkbox" id="filmTranslate" checked> <span>Tự dịch prompt tiếng Việt → tiếng Anh</span></label>
+        <label class="row" style="cursor:pointer"><input type="checkbox" id="filmNativeAudio"> <span>🎙 Thoại gốc: nhân vật tự nói tiếng Việt trong video (không lồng tiếng)</span></label>
       </div>
       <div class="row" style="margin-top:11px">
         <span class="small muted">🎵 Nhạc nền (tùy chọn):</span>
@@ -291,8 +292,9 @@ details.adv{margin-top:10px} details.adv summary{cursor:pointer;color:var(--mute
     </div>
 
     <div class="card pad" id="sbSec">
-      <div class="row"><h2>🎞 Storyboard</h2><span class="grow"></span><span class="small muted" id="sbInfo"></span></div>
+      <div class="row"><h2>🎞 Storyboard</h2><span class="small muted" id="sbComfy" title="Trạng thái máy ComfyUI trên máy này">⚪ ComfyUI: …</span><span class="grow"></span><span class="small muted" id="sbInfo"></span></div>
       <div class="row" style="margin-top:9px">
+        <button class="btn primary big" id="sbAutoBtn">▶ LÀM PHIM TỰ ĐỘNG</button>
         <button class="btn" id="sbSyncBtn">🔄 Đồng bộ từ kịch bản</button>
         <button class="btn" id="sbGenBtn">▶ Tạo các cảnh còn thiếu</button>
         <button class="btn primary" id="sbAsmBtn">🎬 Dựng phim theo thứ tự board</button>
@@ -953,6 +955,10 @@ async function filmRun(){
         const q=await api(ac?('/admin/accounts/'+ac+'/quota'):'/admin/quota', {method:'POST', signal:ctl.signal});
         if(q && q.weekly_used_pct!=null){ filmSay('📊 Hạn mức tuần đã dùng '+q.weekly_used_pct+'% (reset '+(q.weekly_reset||'?')+')'); if(q.weekly_used_pct>=95) filmSay('⚠ Hạn mức tuần gần cạn — các cảnh cuối có thể lỗi, tool sẽ tự chạy lại và báo rõ cảnh nào thiếu'); }
       }catch(e){ filmSay('ℹ Không đọc được hạn mức (vẫn tạo tiếp)'); }
+      if($('filmNativeAudio')&&$('filmNativeAudio').checked){
+        prompts=prompts.map((p,i)=>{ const d=nativeDirective(filmScenes[i]); return d? (p+d) : p; });
+        filmSay('🎙 THOẠI GỐC: nhân vật tự nói tiếng Việt ngay trong video — dựng phim sẽ giữ nguyên tiếng gốc, không lồng tiếng');
+      }
       const charRefs=charRefsPayload();
       if(charRefs.reference_images.length) filmSay('🎭 Đang dùng '+charRefs.reference_images.length+' ảnh mẫu khóa nhân vật');
       const runKey='filmprog_'+(()=>{ let h=0; const s=title+'###'+prompts.join('###'); for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))|0; } return (h>>>0).toString(36); })();
@@ -1066,11 +1072,12 @@ async function filmRun(){
         filmSay('🎵 Đã nạp nhạc nền: '+d.file);
       }catch(e){ filmSay('⚠ Tải nhạc nền lỗi ('+e.message+') — dựng không nhạc'); }
     }
-    if(!filmMusicObj && window.__autoMusic){ filmMusicObj={auto:true, volume:0.35}; filmSay('🎵 Nhạc nền: tool tự sinh, tự hạ nhỏ dưới thoại'); }
+    if(!filmMusicObj && window.__autoMusic){ filmMusicObj={auto:true, volume:($('filmNativeAudio')&&$('filmNativeAudio').checked?0.12:0.35)}; filmSay('🎵 Nhạc nền: tool tự sinh, tự hạ nhỏ dưới thoại'); }
     setStageTxt('Đang lồng tiếng + nối phim…');
     filmSay('🔊 Gửi manifest sang dịch vụ dựng phim (lồng tiếng Việt → nối → chữ ký → kiểm tra)…');
-    const job=await filmApi('/assemble', { title, signature:'by prompt Thaovy19T', music: filmMusicObj, edit:{transition:'fade', duration:0.6, title:true},
-      scenes: files.map((f,i)=>({ file:f, voice: filmVoiceOf('Người kể chuyện'), dialogue: (filmScenes[i].thoai||[]).map(t=>({speaker:t.speaker, line:t.line, voice: filmVoiceOf(t.speaker)})) })) });
+    const _nat=$('filmNativeAudio')&&$('filmNativeAudio').checked;
+    const job=await filmApi('/assemble', { title, signature:'by prompt Thaovy19T', music: filmMusicObj, edit:{transition:'fade', duration:0.6, title:true}, ...(_nat?{bg_volume:1.0}:{}),
+      scenes: files.map((f,i)=>({ file:f, voice: filmVoiceOf('Người kể chuyện'), dialogue: _nat? [] : (filmScenes[i].thoai||[]).map(t=>({speaker:t.speaker, line:t.line, voice: filmVoiceOf(t.speaker)})) })) });
     let printed=0;
     for(let k=0; k<240; k++){
       await new Promise(r=>setTimeout(r,4000));
@@ -1136,7 +1143,7 @@ async function sbGenScene(i){
   const sc=sbScenes[i]; if(!sc) return;
   sbBusy=true; sbSetChip(i,'đang tạo…');
   try{
-    const vb={ prompt: sbFullPrompt(sc.prompt), duration:Number($('durSel').value), account_id:$('accountSel').value||null,
+    const vb={ prompt: sbFullPrompt(sc.prompt)+(($('filmNativeAudio')&&$('filmNativeAudio').checked)?nativeDirective(sc):''), duration:Number($('durSel').value), account_id:$('accountSel').value||null,
       size:$('sizeSel').value, generation_mode:'independent', prompt_language:'auto', ...charRefsPayload() };
     let vurl=null, err=null;
     for(let a=0;a<6&&!vurl;a++){
@@ -1162,8 +1169,9 @@ async function sbAssemble(){
   const title=$('filmTitle').value.trim()||'Phim của tôi';
   const btn=$('sbAsmBtn'); btn.disabled=true; btn.textContent='Đang dựng…';
   try{
-    const job=await filmApi('/assemble', { title, signature:'by prompt Thaovy19T', music:{auto:true, volume:0.35}, edit:{transition:'fade', duration:0.6, title:true},
-      scenes: sbScenes.map(sc=>({ file: sc.file, voice: filmVoiceOf('Người kể chuyện'), dialogue:(sc.thoai||[]).map(t=>({speaker:t.speaker, line:t.line, voice: filmVoiceOf(t.speaker)})) })) });
+    const _nat=$('filmNativeAudio')&&$('filmNativeAudio').checked;
+    const job=await filmApi('/assemble', { title, signature:'by prompt Thaovy19T', music:{auto:true, volume:_nat?0.12:0.35}, edit:{transition:'fade', duration:0.6, title:true}, ...(_nat?{bg_volume:1.0}:{}),
+      scenes: sbScenes.map(sc=>({ file: sc.file, voice: filmVoiceOf('Người kể chuyện'), dialogue: _nat? [] : (sc.thoai||[]).map(t=>({speaker:t.speaker, line:t.line, voice: filmVoiceOf(t.speaker)})) })) });
     for(let k=0;k<240;k++){
       await new Promise(r=>setTimeout(r,4000));
       const r=await fetch(FILM_API+'/job/'+job.job_id); const j=await r.json();
@@ -1178,6 +1186,43 @@ $('sbSyncBtn').onclick=()=>sbSync(true);
 $('sbGenBtn').onclick=sbGenMissing;
 $('sbAsmBtn').onclick=sbAssemble;
 document.querySelector('.nav a[data-tab="storyboard"]').addEventListener('click', ()=>setTimeout(()=>{ sbSync(false); }, 60));
+
+
+/* ---------- v5.0: native speech directives + Storyboard auto-film + ComfyUI chip ---------- */
+const VOICE_DESC={'male-adult':'a middle-aged man','male-teen':'a teenage boy','male-child':'a young boy','male-elder':'an elderly man','female-adult':'a middle-aged woman','female-teen':'a teenage girl','female-child':'a young girl','female-elder':'an elderly woman'};
+function nativeDirective(sc){
+  const lines=(sc&&sc.thoai)||[];
+  if(!lines.length) return '';
+  const parts=lines.map(t=>{ const v=filmVoiceOf(t.speaker); const who=VOICE_DESC[(v.gender||'female')+'-'+(v.age||'adult')]||'a person'; return who+' ('+t.speaker+') says exactly: "'+t.line+'"'; });
+  if(parts.length===1) return ' The character SPEAKS ALOUD in Vietnamese with a natural Northern Vietnamese accent, '+parts[0]+'. Lips move naturally and stay in perfect sync with the spoken words, clear spoken dialogue audio in the video itself, no music under the voice.';
+  return ' The characters SPEAK ALOUD in Vietnamese with natural Northern Vietnamese accents, taking turns with NO overlapping speech, lips in perfect sync for whoever is speaking while the others listen silently: '+parts.join('. Then ')+'. Clear spoken dialogue audio in the video itself, no music under the voices.';
+}
+async function sbAutoFilm(){
+  const btn=$('sbAutoBtn');
+  try{
+    btn.disabled=true; btn.textContent='Đang làm phim tự động…';
+    await sbSync(false);
+    if(!sbScenes.length){ toast('Chưa có kịch bản — nạp 1 tập ở tab Làm phim trước', true); return; }
+    if(!refs.some(r=>!r.isDoc)){
+      if($('filmCharDesc').value.trim()){
+        toast('🎭 Chưa có nhân vật — tool tự tạo ảnh định trang chuẩn…');
+        try{ await genCharSheet(); toast('✓ Đã tạo nhân vật chuẩn — mọi cảnh sẽ khóa theo ảnh này'); }
+        catch(e){ toast('Tạo ảnh định trang lỗi ('+e.message+') — quay tiếp không khóa mặt', true); }
+      }
+    }
+    await sbGenMissing();
+    await sbAssemble();
+  }catch(e){ toast('Làm phim tự động dừng: '+e.message, true); }
+  finally{ btn.disabled=false; btn.textContent='▶ LÀM PHIM TỰ ĐỘNG'; }
+}
+$('sbAutoBtn').onclick=sbAutoFilm;
+function sbComfyCheck(){
+  const el=$('sbComfy'); if(!el) return;
+  fetch(FILM_API+'/comfy/stats').then(r=>r.json()).then(d=>{
+    el.textContent=d.online? ('🟢 ComfyUI sẵn sàng · '+(d.gpu||'GPU')+' · trống '+Math.round((d.vram_free||0)/1073741824*10)/10+'GB VRAM') : '⚪ ComfyUI chưa chạy';
+  }).catch(()=>{ el.textContent='⚪ ComfyUI: không rõ'; });
+}
+sbComfyCheck(); setInterval(sbComfyCheck, 60000);
 
 $('filmRunBtn').onclick=filmRun;
 

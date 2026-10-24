@@ -603,7 +603,17 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 items = []
             self._send(200, {"items": items}); return
-        if self.path == "/health":
+        if self.path == "/comfy/stats":
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:8188/system_stats", timeout=4) as r:
+                    cs = json.loads(r.read().decode("utf-8"))
+                dev = (cs.get("devices") or [{}])[0]
+                self._send(200, {"online": True, "gpu": dev.get("name", ""),
+                                 "vram_total": dev.get("vram_total", 0),
+                                 "vram_free": dev.get("vram_free", 0)})
+            except Exception as e:
+                self._send(200, {"online": False, "error": str(e)[:120]})
+        elif self.path == "/health":
             self._send(200, {"ok": True, "ffmpeg": os.path.isfile(FFMPEG),
                              "media_dir": MEDIA_DIR, "clone_ready": clone_ready(),
                              "casting": [f"{g}-{a}" for (g, a) in CASTING],
