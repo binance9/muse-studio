@@ -63,14 +63,17 @@ Giao diện Thư viện của Muse Studio đang chạy thật — mỗi video đ
 
 ## Bước 1 — Tải và chạy Muse2API (động cơ tạo ảnh/video)
 
-1. Vào trang phát hành chính thức của tác giả gốc: **https://github.com/bitgacon/muse2api/releases** và tải file **`Muse2API_VI_Portable_1.6.8.zip`** (bản đầy đủ cho Windows). Chỉ tải ở trang này — file ở nơi khác có thể đã bị gắn mã độc.
+1. **Bấm vào link này để tải thẳng đúng 1 file duy nhất: [Muse2API_VI_Portable_1.6.8.zip](https://github.com/bitgacon/muse2api/releases/download/v1.6.8/Muse2API_VI_Portable_1.6.8.zip)** (bản đầy đủ cho Windows, khoảng 67 MB, từ trang phát hành chính thức của tác giả gốc: https://github.com/bitgacon/muse2api/releases). Chỉ tải ở trang này — file ở nơi khác có thể đã bị gắn mã độc.
+
+   > ⚠️ **ĐỪNG tải nhầm file `Muse2API_Update_1.6.7_to_1.6.8.zip`** (chỉ khoảng 7,5 MB). Đó là bản **vá** dành cho người đã có sẵn bản 1.6.7, **không chạy một mình được**. Nếu tải nhầm rồi mở `Muse2API_Studio.exe` trong thư mục Update, chương trình sẽ báo lỗi **"Failed to load Python DLL ...\_internal\python312.dll — LoadLibrary: The specified module could not be found"** và không mở lên được. Gặp lỗi này thì xóa thư mục Update đó đi, tải lại đúng file Portable ở link trên là xong. Tuyệt đối không lên mạng tải lẻ file `python312.dll` về chép vào.
+
 2. Tạo sẵn cấu trúc thư mục như sau (các bước sau đều dựa trên đúng cấu trúc này, đừng đổi tên):
    ```
    C:\muse2api-test\
    └─ app\
       └─ Muse2API_VI_Portable_1.6.8\   ← giải nén bản portable vào đây
    ```
-3. Mở thư mục vừa giải nén, chạy **`Muse2API_Studio.exe`** (hoặc file `05_MO_GUI.bat` nếu bản của bạn chạy bằng bat). Đợi chương trình khởi động xong.
+3. Giải nén **toàn bộ** file zip, giữ nguyên thư mục **`_internal`** nằm bên cạnh EXE (không chép EXE ra một mình, không chạy khi file còn nằm trong zip). Mở thư mục vừa giải nén, chạy **`Muse2API_Studio.exe`** (hoặc file `05_MO_GUI.bat` nếu bản của bạn chạy bằng bat). Đợi chương trình khởi động xong.
 4. Trong cửa sổ chương trình, làm theo file `HUONG_DAN_1.6.8.txt` đi kèm để **thêm tài khoản muse.ai của bạn** (đăng nhập bằng tài khoản bạn đã đăng ký ở mục Yêu cầu). Chương trình sẽ mở trình duyệt để bạn tự đăng nhập — mật khẩu chỉ nhập trên trang chính thức của muse.ai, không nhập vào bất kỳ chỗ nào khác.
 5. Sau khi thêm tài khoản, chương trình tự sinh **API key** và lưu trong file **`.env`** ngay trong thư mục app. Mở file `.env` bằng Notepad, tìm dòng bắt đầu bằng `KEY=` — phần phía sau dấu `=` là API key của bạn. **Ghi lại key này ở nơi riêng tư và không gửi cho ai.**
 6. Kiểm tra động cơ đã chạy: mở trình duyệt vào **http://127.0.0.1:18610** — thấy trang quản trị của Muse2API là đạt. Để nguyên chương trình này chạy trong suốt quá trình làm phim.
@@ -167,6 +170,7 @@ Không cài bước này vẫn làm phim được — dịch vụ tự dùng gi�
 
 | Hiện tượng | Nguyên nhân thường gặp | Cách xử lý |
 |---|---|---|
+| Mở `Muse2API_Studio.exe` báo "Failed to load Python DLL ... `python312.dll`" | Đã tải nhầm file **Update** (~7,5 MB) thay vì bản **Portable** đầy đủ (~67 MB), hoặc giải nén thiếu / chép EXE ra một mình làm mất thư mục `_internal` | Xóa bản đó đi, tải lại đúng file Portable bằng link tải thẳng ở Bước 1, giải nén **toàn bộ** và chạy EXE ngay trong thư mục vừa giải nén, giữ nguyên `_internal` bên cạnh EXE |
 | Studio hiện màn hình bắt nhập API key | Chưa từng mở bằng địa chỉ có `?key=` | Mở lại `http://127.0.0.1:18610/batch?key=KEY_CUA_BAN` đúng 1 lần (Bước 3) |
 | Vào `127.0.0.1:18610` không thấy gì | Muse2API chưa chạy hoặc đã tắt | Mở lại `Muse2API_Studio.exe` ở Bước 1, đợi khởi động xong rồi F5 |
 | `/health` của film-service không mở được | Dịch vụ dựng phim chưa chạy | Chạy tay `python film_service.py` trong `C:\muse2api-test\film-service` để xem lỗi hiện ra, hoặc kiểm tra task `MuseFilmService` ở Bước 4 |
